@@ -1,0 +1,14 @@
+{
+  "name": "claude-skills",
+  "owner": {
+    "name": "François Bouyer",
+    "email": "francois.bouyer@thetribe.io"
+  },
+  "plugins": [
+    {
+      "name": "fb-skills",
+      "source": "./",
+      "description": "Skills personnels François Bouyer : review-pr et worktree-env"
+    }
+  ]
+}
