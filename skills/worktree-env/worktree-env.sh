@@ -400,11 +400,11 @@ wt_print_access() {
     wt_project_print_access "$bbase"
     return
   fi
-  printf '\n=== Access (auto-mapped) ===\n'
+  printf '\n=== Accès (auto-mappé) ===\n'
   local entry svc cport
   for entry in "${WT_DISC_PORT_ENTRIES[@]+"${WT_DISC_PORT_ENTRIES[@]}"}"; do
     svc="${entry%% *}"; cport="${entry##* }"
-    printf '  %-16s http://localhost:%s  (container %s)\n' "$svc" "$(wt_host_port_for "$svc" "$cport")" "$cport"
+    printf '  %-16s http://localhost:%s  (conteneur %s)\n' "$svc" "$(wt_host_port_for "$svc" "$cport")" "$cport"
   done
   printf '\n'
 }
@@ -443,18 +443,18 @@ cmd_up() {
 cmd_status() {
   wt_resolve_context || return 1
 
-  printf 'Active worktree stacks (%s-*):\n\n' "$WT_PROJECT_PREFIX"
+  printf 'Stacks worktree actifs (%s-*):\n\n' "$WT_PROJECT_PREFIX"
   local found=0 name
   while IFS= read -r name; do
     [[ "$name" == ${WT_PROJECT_PREFIX}-* ]] || continue
     found=1
-    printf '  Project: %s\n' "$name"
+    printf '  Projet : %s\n' "$name"
     docker ps --filter "label=com.docker.compose.project=${name}" \
       --format '    {{.Names}}  {{.Ports}}' 2>/dev/null
     printf '\n'
   done < <(docker compose ls --all --format '{{.Name}}' 2>/dev/null)
 
-  [[ "$found" -eq 0 ]] && printf '  (none)\n'
+  [[ "$found" -eq 0 ]] && printf '  (aucun)\n'
   return 0
 }
 

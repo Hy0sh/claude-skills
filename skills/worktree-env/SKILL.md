@@ -11,120 +11,121 @@ description: >
   Invoked as `/worktree-env setup`, it instead guides creating that per-project config.
 ---
 
+When communicating with the user (setup interview questions, status messages, summaries), write in French. Keep code, paths, and technical identifiers unchanged.
+
 ## Modes
 
-- **`/worktree-env setup`** (argument `setup`) → suis la section **« Mode setup »** en bas :
-  entretien guidé pour créer/réviser la config par projet. N'exécute rien d'autre.
-- **Sinon** (run/test/observe) → suis les sections ci-dessous (usage du script + disciplines).
+- **`/worktree-env setup`** (argument `setup`) → follow the **"Setup mode"** section below:
+  guided interview to create/revise the per-project config. Do nothing else.
+- **Otherwise** (run/test/observe) → follow the sections below (script usage + disciplines).
 
-## Quand déclencher ce skill
+## When to trigger this skill
 
-- Tu es dans un git worktree (le toplevel n'est pas le repo principal) **et** tu
-  dois démarrer, tester, ou observer un stack Docker Compose.
-- Tu dois faire une preuve visuelle (screenshot, réponse d'API) depuis le code
-  du worktree (cf. §11 de workflow-rules).
-- Tu veux vérifier que tes modifications sont bien vues par les conteneurs avant
-  de déclarer « vert ».
+- You are inside a git worktree (the toplevel is not the principal repo) **and** you
+  need to start, test, or observe a Docker Compose stack.
+- You need to produce a visual proof (screenshot, API response) from the worktree code
+  (see §11 of workflow-rules).
+- You want to verify that your changes are visible to the containers before
+  declaring "green".
 
-## Comment utiliser le script
+## How to use the script
 
-Le script `worktree-env.sh` est dans `~/.claude/skills/worktree-env/`. Lance-le
-depuis n'importe quel répertoire **à l'intérieur** du worktree :
+The script `worktree-env.sh` lives in `~/.claude/skills/worktree-env/`. Run it
+from any directory **inside** the worktree:
 
 ```bash
-# Démarrer le stack (services par défaut, ou tous si aucune config)
+# Start the stack (default services, or all if no config)
 ~/.claude/skills/worktree-env/worktree-env.sh up
 
-# Démarrer uniquement certains services
+# Start specific services only
 ~/.claude/skills/worktree-env/worktree-env.sh up db backend
 
-# Voir les stacks worktree actifs et leurs ports
+# List active worktree stacks and their ports
 ~/.claude/skills/worktree-env/worktree-env.sh status
 
-# Arrêter et supprimer le stack du worktree courant (volumes inclus)
+# Stop and remove the current worktree stack (volumes included)
 ~/.claude/skills/worktree-env/worktree-env.sh down
 
-# Forcer le nettoyage du worktree COURANT : conteneurs + volumes + fantômes
-# laissés par un up qui a échoué (scopé au worktree courant uniquement)
+# Force-clean the CURRENT worktree: containers + volumes + ghosts
+# left by a failed up (scoped to the current worktree only)
 ~/.claude/skills/worktree-env/worktree-env.sh clean
 ```
 
-Le premier `up` :
-- nomme le projet Compose `<basename-repo-principal>-wt-<slug-worktree>` ;
-- alloue un bloc de ports libre (`block_base = WT_BASE_START + WT_BLOCK_SIZE*k`,
-  défauts `20000` / `20`) ;
-- **auto-découvre** les services, leurs `container_name` codés en dur et leurs
-  ports via `docker compose -f <base> config --format json` ;
-- génère deux fichiers dans le toplevel (gitignorés) : `.env.worktree`
-  (`COMPOSE_PROJECT_NAME`, `WT_BLOCK`) et `compose.override.yaml`
-  (container_name re-dérivés en `${COMPOSE_PROJECT_NAME}-<svc>`, ports remappés).
+The first `up`:
+- names the Compose project `<principal-repo-basename>-wt-<worktree-slug>`;
+- allocates a free port block (`block_base = WT_BASE_START + WT_BLOCK_SIZE*k`,
+  defaults `20000` / `20`);
+- **auto-discovers** services, their hardcoded `container_name` values and their
+  ports via `docker compose -f <base> config --format json`;
+- generates two files in the toplevel (gitignored): `.env.worktree`
+  (`COMPOSE_PROJECT_NAME`, `WT_BLOCK`) and `compose.override.yaml`
+  (container_names re-derived as `${COMPOSE_PROJECT_NAME}-<svc>`, ports remapped).
 
-Les URLs résolues sont affichées au `up`. Les indices de port suivent l'ordre
-alphabétique de découverte (déterministe) — donc **pas** un `+1/+2` fixe.
+Resolved URLs are printed on `up`. Port indices follow alphabetical discovery order
+(deterministic) — so **not** a fixed `+1/+2`.
 
-## Config par projet (optionnelle)
+## Per-project config (optional)
 
-Un projet peut poser une config gitignorée à `<repo>/.claude/worktree-env.conf.sh`
-(sourcée côté hôte, jamais copiée dans le worktree). Sans elle, le `up` marche en
-auto-mapping brut. Avec elle, on personnalise :
+A project may place a gitignored config at `<repo>/.claude/worktree-env.conf.sh`
+(sourced host-side, never copied into the worktree). Without it, `up` works with
+raw auto-mapping. With it, you can customise:
 
-- variables : `WT_PROJECT_PREFIX`, `WT_BLOCK_SIZE`, `WT_BASE_START`,
-  `WT_DEFAULT_SERVICES`, `WT_ENV_FILES` (fichiers provisionnés depuis le principal) ;
-- hooks : `wt_project_service_extra <svc> <bbase>` (YAML extra par service, ex.
-  `VITE_API_URL`), `wt_project_volumes` (volumes top-level), `wt_project_post_up
-  <bbase>` (seed après `up`), `wt_project_print_access <bbase>` (sortie d'accès).
+- variables: `WT_PROJECT_PREFIX`, `WT_BLOCK_SIZE`, `WT_BASE_START`,
+  `WT_DEFAULT_SERVICES`, `WT_ENV_FILES` (files provisioned from the principal);
+- hooks: `wt_project_service_extra <svc> <bbase>` (extra YAML per service, e.g.
+  `VITE_API_URL`), `wt_project_volumes` (top-level volumes), `wt_project_post_up
+  <bbase>` (seed after `up`), `wt_project_print_access <bbase>` (access output).
 
-Dans un hook, `wt_host_port_for <svc> <container_port>` rend le port hôte assigné.
-Modèle complet documenté : `~/.claude/skills/worktree-env/worktree-env.conf.example.sh`.
+Inside a hook, `wt_host_port_for <svc> <container_port>` returns the assigned host port.
+Full annotated template: `~/.claude/skills/worktree-env/worktree-env.conf.example.sh`.
 
-## Discipline §10 — isolation stricte (workflow-rules)
+## Discipline §10 — strict isolation (workflow-rules)
 
-- **Ne jamais** toucher le stack partagé du repo principal :
-  `docker compose restart/stop/up/down` sans `--env-file .env.worktree` est
-  interdit. Utilise uniquement les commandes ci-dessus.
-- **Ne jamais** muter la DB partagée. Les volumes du worktree sont distincts
-  (préfixés par `<repo>-wt-<slug>_`) ; les caches partagés à nom fixe survivent
-  au `clean`.
-- **Nettoie ton empreinte** en fin de tâche : `down` (teardown propre) ou `clean`
-  (force + ramasse les fantômes d'un up échoué) — les deux scopés au worktree
-  courant, jamais aux autres.
+- **Never** touch the shared stack of the principal repo:
+  `docker compose restart/stop/up/down` without `--env-file .env.worktree` is
+  forbidden. Use only the commands listed above.
+- **Never** mutate the shared DB. Worktree volumes are distinct
+  (prefixed with `<repo>-wt-<slug>_`); shared fixed-name caches survive `clean`.
+- **Clean up your footprint** at end of task: `down` (clean teardown) or `clean`
+  (force + collect ghosts from a failed up) — both scoped to the current worktree,
+  never to others.
 
-## Discipline §11 — preuve de fonctionnement runtime
+## Discipline §11 — runtime proof of behaviour
 
-Avant de déclarer un comportement « vert », vérifie que le conteneur voit bien
-tes modifications :
+Before declaring a behaviour "green", verify that the container actually sees
+your changes:
 
 ```bash
-# Confirmer qu'un symbole fraîchement écrit est présent dans le conteneur
-docker exec <projet>-backend grep -r "MonNouveauSymbole" /app/ | head -3
+# Confirm a freshly written symbol is present in the container
+docker exec <project>-backend grep -r "MyNewSymbol" /app/ | head -3
 ```
 
-Si le conteneur ne voit pas tes éditions (volume non monté, image stale),
-arrête-toi et diagnostique avant de conclure. Les tests verts ne suffisent pas
-pour une tâche à comportement observable — fournis un screenshot, un corps de
-réponse, ou une sortie terminal issue de la vraie surface.
+If the container does not see your edits (volume not mounted, stale image),
+stop and diagnose before concluding. Green tests are not enough for a task with
+observable behaviour — provide a screenshot, a response body, or terminal output
+from the real surface.
 
 ---
 
-## Mode setup (`/worktree-env setup`)
+## Setup mode (`/worktree-env setup`)
 
-Déclenché quand le skill est invoqué avec l'argument `setup`. Objectif : créer ou
-réviser la config par projet `<repo-principal>/.claude/worktree-env.conf.sh`.
+Triggered when the skill is invoked with the argument `setup`. Goal: create or
+revise the per-project config `<principal-repo>/.claude/worktree-env.conf.sh`.
 
-Le moteur auto-découvre services, ports et `container_name`. **La plupart des
-projets n'ont besoin d'aucune config** : un simple `up` marche en auto-mapping.
-La config ne sert qu'aux besoins non devinables. Conduis un court entretien, puis
-n'écris **que** les hooks/variables réellement nécessaires. KISS — si rien n'est
-requis, dis-le et n'écris pas de fichier.
+The engine auto-discovers services, ports, and `container_name`. **Most projects
+need no config at all**: a plain `up` works with auto-mapping. The config only
+covers needs that cannot be inferred. Conduct a short interview, then write
+**only** the hooks/variables that are actually needed. KISS — if nothing is
+required, say so and write no file.
 
-### 1. Cadrer le projet
-- Résous le repo principal : `git rev-parse --show-toplevel` puis remonte au
-  `--git-common-dir` si tu es dans un worktree. La config vit à
-  `<repo-principal>/.claude/worktree-env.conf.sh`.
-- Si une config existe déjà, lis-la et propose de la **réviser** plutôt que d'écraser.
+### 1. Frame the project
+- Resolve the principal repo: `git rev-parse --show-toplevel` then walk up to
+  `--git-common-dir` if inside a worktree. The config lives at
+  `<principal-repo>/.claude/worktree-env.conf.sh`.
+- If a config already exists, read it and offer to **revise** it rather than overwrite.
 
-### 2. Montrer ce qui est déjà auto-géré
-Lance la découverte pour que l'utilisateur voie ce qui ne nécessite **aucune** config :
+### 2. Show what is already auto-managed
+Run discovery so the user can see what requires **no** config:
 
 ```bash
 BASE=$(for f in compose.yaml compose.yml docker-compose.yaml docker-compose.yml; do [ -f "$f" ] && echo "$f" && break; done)
@@ -132,49 +133,49 @@ docker compose -f "$BASE" config --format json 2>/dev/null \
   | python3 -c "import sys,json;d=json.load(sys.stdin);[print(f\"{s:16} cname={v.get('container_name','-')} ports={[p.get('target') for p in v.get('ports',[])]}\") for s,v in sorted(d['services'].items())]"
 ```
 
-Si `docker compose config` échoue (env_file manquant), c'est déjà un signal :
-il faudra `WT_ENV_FILES`.
+If `docker compose config` fails (missing env_file), that is already a signal:
+`WT_ENV_FILES` will be needed.
 
-### 3. Interviewer sur les extras (AskUserQuestion, ciblé)
-Ne pose que les questions pertinentes au vu de la découverte. Couvre :
+### 3. Interview on extras (AskUserQuestion, targeted)
+Ask only the questions that are relevant given the discovery output. Cover:
 
-- **Env files à provisionner** — fichiers gitignorés que Compose monte dans les
-  conteneurs (ex. `backend/.env`) et qui manquent dans un worktree frais. →
+- **Env files to provision** — gitignored files that Compose mounts into containers
+  (e.g. `backend/.env`) and that are missing in a fresh worktree. →
   `WT_ENV_FILES=(...)`.
-- **Services par défaut** — restreindre le `up` sans argument à un sous-ensemble ?
-  Sinon tous les services découverts démarrent. → `WT_DEFAULT_SERVICES=(...)`.
-- **Env spéciale par service** — un service a-t-il besoin de l'URL/port d'un autre
-  (ex. front `VITE_API_URL` → port backend) ? → hook `wt_project_service_extra`,
+- **Default services** — restrict `up` with no arguments to a subset?
+  Otherwise all discovered services start. → `WT_DEFAULT_SERVICES=(...)`.
+- **Per-service env** — does a service need the URL/port of another
+  (e.g. frontend `VITE_API_URL` → backend port)? → hook `wt_project_service_extra`,
   via `wt_host_port_for <svc> <container_port>`.
-- **Caches partagés / volumes isolés** — caches deps (poetry/yarn/pip/npm) à
-  mutualiser entre worktrees (volume à `name:` fixe), ou répertoire à isoler par
-  worktree (ex. `node_modules`, volume sans `name:`) ? → `wt_project_service_extra`
-  + `wt_project_volumes`. Mentionne aussi tout bind-mount du compose à retirer en
-  worktree (ex. `.git`) via `volumes: !override`.
-- **Bootstrap après up** — seed / création de comptes / migration à lancer une fois
-  le stack prêt ? → hook `wt_project_post_up`. Il dispose de `wt_compose` et
-  `$WT_TOPLEVEL`, doit être **idempotent** et ne **jamais** toucher de DB partagée.
-- **Sortie d'accès** — afficher des URLs labellisées + comptes de test au `up` ?
-  → hook `wt_project_print_access`. Sinon le moteur liste les URLs brutes.
+- **Shared caches / isolated volumes** — dep caches (poetry/yarn/pip/npm) to share
+  across worktrees (volume with a fixed `name:`), or a directory to isolate per
+  worktree (e.g. `node_modules`, volume without `name:`)? → `wt_project_service_extra`
+  + `wt_project_volumes`. Also mention any compose bind-mounts to drop in worktrees
+  (e.g. `.git`) via `volumes: !override`.
+- **Bootstrap after up** — seed / account creation / migration to run once the stack
+  is ready? → hook `wt_project_post_up`. It has access to `wt_compose` and
+  `$WT_TOPLEVEL`, must be **idempotent** and must **never** touch a shared DB.
+- **Access output** — display labelled URLs + test accounts on `up`?
+  → hook `wt_project_print_access`. Otherwise the engine lists raw URLs.
 
-### 4. Écrire la config
-- Pars du modèle commenté `~/.claude/skills/worktree-env/worktree-env.conf.example.sh`.
-- N'inclus **que** ce qui a été demandé — supprime les hooks non utilisés. Pas de
-  scaffolding spéculatif. Commentaires en anglais.
-- Écris dans `<repo-principal>/.claude/worktree-env.conf.sh`.
+### 4. Write the config
+- Start from the annotated template `~/.claude/skills/worktree-env/worktree-env.conf.example.sh`.
+- Include **only** what was asked for — remove unused hooks. No speculative scaffolding.
+  Comments in English.
+- Write to `<principal-repo>/.claude/worktree-env.conf.sh`.
 
-### 5. Gitignorer + vérifier
+### 5. Gitignore + verify
 ```bash
 grep -qxF '/.claude/worktree-env.conf.sh' .git/info/exclude 2>/dev/null \
   || printf '/.claude/worktree-env.conf.sh\n' >> .git/info/exclude
-git check-ignore .claude/worktree-env.conf.sh        # doit afficher le chemin
+git check-ignore .claude/worktree-env.conf.sh        # must print the path
 bash -n .claude/worktree-env.conf.sh && echo "syntax OK"
 ```
 
-Preuve rapide optionnelle (sans démarrer de conteneurs), depuis un worktree —
+Optional quick proof (no containers started), from a worktree —
 `bash -c 'cd <worktree>; source ~/.claude/skills/worktree-env/worktree-env.sh; wt_ensure_env; cat compose.override.yaml'` —
-puis indique la commande finale : `worktree-env.sh up`.
+then state the final command: `worktree-env.sh up`.
 
-**À éviter** : sur-configurer (si la découverte suffit, n'écris rien) ; hardcoder
-des ports (toujours `wt_host_port_for` dans les hooks — les indices suivent l'ordre
-alphabétique de découverte, pas un `+1/+2`) ; committer la config (gitignorée).
+**Avoid**: over-configuring (if discovery is enough, write nothing); hardcoding
+ports (always use `wt_host_port_for` inside hooks — indices follow alphabetical
+discovery order, not a fixed `+1/+2`); committing the config (it is gitignored).

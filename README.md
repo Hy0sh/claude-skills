@@ -13,11 +13,9 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 
 ```bash
 # Dans Claude Code
-/plugin marketplace add francois-bouyer/claude-skills
+/plugin marketplace add Hy0sh/claude-skills
 /plugin install fb-skills
 ```
-
-> Remplace `francois-bouyer/claude-skills` par le chemin réel `owner/repo` une fois le repo poussé sur GitHub.
 
 ## Installation manuelle (sans plugin)
 
