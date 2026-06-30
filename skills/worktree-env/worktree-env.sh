@@ -315,9 +315,11 @@ wt_provision_env_files() {
 # ---------------------------------------------------------------------------
 wt_resolve_context() {
   local git_common_dir
-  WT_TOPLEVEL=$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null) || \
-    WT_TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null) || {
-      printf 'ERROR: not inside a git repository\n' >&2
+  # Resolve from the CWD (the worktree the user runs from), never from
+  # SCRIPT_DIR: the skill itself may live in its own git repo, which would
+  # otherwise be mistaken for the worktree.
+  WT_TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null) || {
+      printf 'ERROR: not inside a git repository (run from inside the worktree)\n' >&2
       return 1
     }
 
