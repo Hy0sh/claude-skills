@@ -1,5 +1,5 @@
 {
-  "name": "fb-skills",
+  "name": "hy0sh-skills",
   "description": "Skills personnels : review-pr (review structurée de PR GitHub) et worktree-env (stack Docker Compose isolée par worktree git)",
   "version": "0.1.0",
   "author": {

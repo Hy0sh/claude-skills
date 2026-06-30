@@ -14,7 +14,7 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 ```bash
 # Dans Claude Code
 /plugin marketplace add Hy0sh/claude-skills
-/plugin install fb-skills
+/plugin install hy0sh-skills
 ```
 
 ## Installation manuelle (sans plugin)
@@ -31,7 +31,7 @@ cp -R skills/worktree-env ~/.claude/skills/
 ```
 claude-skills/
 ├── .claude-plugin/
-│   ├── marketplace.json   # déclare le marketplace + le plugin fb-skills
+│   ├── marketplace.json   # déclare le marketplace + le plugin hy0sh-skills
 │   └── plugin.json        # métadonnées du plugin
 └── skills/
     ├── review-pr/

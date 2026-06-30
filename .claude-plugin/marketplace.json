@@ -6,7 +6,7 @@
   },
   "plugins": [
     {
-      "name": "fb-skills",
+      "name": "hy0sh-skills",
       "source": "./",
       "description": "Skills personnels François Bouyer : review-pr et worktree-env"
     }
