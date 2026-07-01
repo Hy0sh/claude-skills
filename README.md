@@ -8,6 +8,7 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 |---|---|
 | `review-pr` | Review structurée et actionnable d'une pull request GitHub |
 | `worktree-env` | Stack Docker Compose isolée par worktree git (conteneurs, volumes et ports séparés) |
+| `dailysum` | Portion personnelle du daily sum collaboratif (commits du jour, enrichissement PR/Jira) à coller dans Slack |
 
 ## Installation
 
