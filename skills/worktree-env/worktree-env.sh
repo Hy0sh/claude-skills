@@ -12,6 +12,7 @@
 # Usage:
 #   worktree-env.sh up [services...]   -- start the worktree stack
 #   worktree-env.sh status             -- list active worktree stacks
+#   worktree-env.sh stop                -- stop the current stack, keep volumes (DB, caches)
 #   worktree-env.sh down               -- compose teardown of current stack + volumes
 #   worktree-env.sh clean              -- force-remove current worktree's containers +
 #                                         volumes + ghosts from a failed up
@@ -461,6 +462,26 @@ cmd_status() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: stop — stop containers but keep volumes (DB, caches). Use this
+# instead of `down` when pausing a worktree you intend to resume: `down -v`
+# destroys postgres_data, forcing a full migration replay on the next `up`.
+# ---------------------------------------------------------------------------
+cmd_stop() {
+  wt_resolve_context || return 1
+
+  if [[ ! -f "${WT_TOPLEVEL}/.env.worktree" ]]; then
+    printf 'No .env.worktree in %s — nothing to stop.\n' "$WT_TOPLEVEL" >&2
+    return 0
+  fi
+
+  printf 'Stopping stack (volumes preserved)\n' >&2
+  docker compose \
+    --project-directory "$WT_TOPLEVEL" \
+    --env-file "${WT_TOPLEVEL}/.env.worktree" \
+    stop
+}
+
+# ---------------------------------------------------------------------------
 # Subcommand: down
 # ---------------------------------------------------------------------------
 cmd_down() {
@@ -510,7 +531,7 @@ cmd_clean() {
 # ---------------------------------------------------------------------------
 main() {
   if [[ $# -eq 0 ]]; then
-    printf 'Usage: %s <up [services...]|status|down|clean>\n' "$(basename "$0")" >&2
+    printf 'Usage: %s <up [services...]|status|stop|down|clean>\n' "$(basename "$0")" >&2
     exit 1
   fi
 
@@ -520,11 +541,12 @@ main() {
   case "$cmd" in
     up)     cmd_up "$@" ;;
     status) cmd_status ;;
+    stop)   cmd_stop ;;
     down)   cmd_down ;;
     clean)  cmd_clean ;;
     *)
       printf 'Unknown command: %s\n' "$cmd" >&2
-      printf 'Usage: %s <up [services...]|status|down|clean>\n' "$(basename "$0")" >&2
+      printf 'Usage: %s <up [services...]|status|stop|down|clean>\n' "$(basename "$0")" >&2
       exit 1
       ;;
   esac

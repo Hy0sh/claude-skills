@@ -43,6 +43,10 @@ from any directory **inside** the worktree:
 # List active worktree stacks and their ports
 ~/.claude/skills/worktree-env/worktree-env.sh status
 
+# Pause the current worktree stack, keep volumes (DB, caches) — use this when
+# leaving the worktree idle but intend to resume: no migration replay on next up
+~/.claude/skills/worktree-env/worktree-env.sh stop
+
 # Stop and remove the current worktree stack (volumes included)
 ~/.claude/skills/worktree-env/worktree-env.sh down
 
@@ -86,9 +90,9 @@ Full annotated template: `~/.claude/skills/worktree-env/worktree-env.conf.exampl
   forbidden. Use only the commands listed above.
 - **Never** mutate the shared DB. Worktree volumes are distinct
   (prefixed with `<repo>-wt-<slug>_`); shared fixed-name caches survive `clean`.
-- **Clean up your footprint** at end of task: `down` (clean teardown) or `clean`
-  (force + collect ghosts from a failed up) — both scoped to the current worktree,
-  never to others.
+- **Clean up your footprint** at end of task: `stop` (pause, keep volumes — resume
+  later without a migration replay), `down` (clean teardown) or `clean` (force +
+  collect ghosts from a failed up) — all scoped to the current worktree, never to others.
 
 ## Discipline §11 — runtime proof of behaviour
 
