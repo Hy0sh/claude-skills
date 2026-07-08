@@ -548,6 +548,96 @@ unset WT_SHARED_INFRA_SERVICES WT_SHARED_LANE_SERVICES
 source "${SCRIPT_DIR}/worktree-env.sh"
 
 # ---------------------------------------------------------------------------
+# Test suite: docker-guard-hook.sh — blocks raw docker compose lifecycle
+# commands wherever worktree-env.sh already applies (worktree, or a principal
+# repo with WT_SHARED_LANE_SERVICES configured), leaves everything else
+# (plain repos, read-only verbs, no compose file) untouched. No real docker
+# calls -- the hook itself never shells out to docker, only to git/jq.
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== docker-guard-hook.sh — context-aware blocking ==="
+
+GUARD_HOOK="${SCRIPT_DIR}/docker-guard-hook.sh"
+
+run_guard() {
+  local dir="$1" cmd="$2" rc=0 out
+  out=$(cd "$dir" && jq -n --arg cmd "$cmd" '{tool_input:{command:$cmd}}' | "$GUARD_HOOK" 2>&1) || rc=$?
+  GUARD_RC="$rc"
+  GUARD_OUT="$out"
+}
+
+# --- fixture: plain repo, no worktree, no lane config, WITH a compose file
+GUARD_PLAIN="${TMPDIR_BASE}/guard_plain"
+mkdir -p "$GUARD_PLAIN"
+git -C "$GUARD_PLAIN" init -q
+git -C "$GUARD_PLAIN" config user.email test@test.com
+git -C "$GUARD_PLAIN" config user.name test
+cat > "${GUARD_PLAIN}/compose.yaml" <<'YAML'
+services:
+  backend:
+    image: python:3.12-alpine
+YAML
+git -C "$GUARD_PLAIN" add -A
+git -C "$GUARD_PLAIN" commit -q -m init
+
+run_guard "$GUARD_PLAIN" "docker compose up"
+assert_eq "plain repo, no worktree, no lane config -> allowed" "0" "$GUARD_RC"
+
+# --- fixture: a worktree of that repo ---
+GUARD_WT="${TMPDIR_BASE}/guard_worktree"
+git -C "$GUARD_PLAIN" worktree add -q -b guard-test-branch "$GUARD_WT" >/dev/null
+
+run_guard "$GUARD_WT" "docker compose up"
+assert_eq "inside a worktree -> blocked" "2" "$GUARD_RC"
+assert_contains "worktree block message mentions worktree-env.sh" "worktree-env.sh" "$GUARD_OUT"
+
+run_guard "$GUARD_WT" "docker compose logs -f backend"
+assert_eq "logs verb (out of scope) in a worktree -> allowed" "0" "$GUARD_RC"
+
+run_guard "$GUARD_WT" "cd /tmp && docker compose down"
+assert_eq "chained command -> still blocked" "2" "$GUARD_RC"
+
+run_guard "$GUARD_WT" "docker compose -f compose.yaml -p foo up -d"
+assert_eq "verb after value-taking flags -> still blocked" "2" "$GUARD_RC"
+
+# --- fixture: a worktree with NO compose file at its root ---
+GUARD_NC_PRINCIPAL="${TMPDIR_BASE}/guard_nocompose_principal"
+mkdir -p "$GUARD_NC_PRINCIPAL"
+git -C "$GUARD_NC_PRINCIPAL" init -q
+git -C "$GUARD_NC_PRINCIPAL" config user.email test@test.com
+git -C "$GUARD_NC_PRINCIPAL" config user.name test
+touch "${GUARD_NC_PRINCIPAL}/.keep"
+git -C "$GUARD_NC_PRINCIPAL" add -A
+git -C "$GUARD_NC_PRINCIPAL" commit -q -m init
+GUARD_NC_WT="${TMPDIR_BASE}/guard_nocompose_worktree"
+git -C "$GUARD_NC_PRINCIPAL" worktree add -q -b guard-nocompose-branch "$GUARD_NC_WT" >/dev/null
+
+run_guard "$GUARD_NC_WT" "docker compose up"
+assert_eq "worktree without a compose file -> allowed" "0" "$GUARD_RC"
+
+# --- fixture: principal repo (no worktree) with shared-lane config ---
+GUARD_LANE="${TMPDIR_BASE}/guard_lane"
+mkdir -p "${GUARD_LANE}/.claude"
+git -C "$GUARD_LANE" init -q
+git -C "$GUARD_LANE" config user.email test@test.com
+git -C "$GUARD_LANE" config user.name test
+cat > "${GUARD_LANE}/compose.yaml" <<'YAML'
+services:
+  backend:
+    image: python:3.12-alpine
+YAML
+echo 'WT_SHARED_LANE_SERVICES=(backend)' > "${GUARD_LANE}/.claude/worktree-env.conf.sh"
+git -C "$GUARD_LANE" add -A
+git -C "$GUARD_LANE" commit -q -m init
+
+run_guard "$GUARD_LANE" "docker compose up"
+assert_eq "principal repo, shared lane configured -> blocked" "2" "$GUARD_RC"
+assert_contains "lane block message mentions claim" "claim" "$GUARD_OUT"
+
+run_guard "$GUARD_LANE" "docker compose ps"
+assert_eq "ps verb (out of scope), shared lane configured -> allowed" "0" "$GUARD_RC"
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
