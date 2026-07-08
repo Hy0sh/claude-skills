@@ -23,6 +23,9 @@ When communicating with the user (setup interview questions, status messages, su
 
 - You are inside a git worktree (the toplevel is not the principal repo) **and** you
   need to start, test, or observe a Docker Compose stack.
+- You are in the principal repo itself (no worktree) **and** the project has shared
+  lane mode configured (`WT_SHARED_LANE_SERVICES`) — use `claim`/`release` there too
+  instead of a bare `docker compose up` (see "Mode lane partagée" below).
 - You need to produce a visual proof (screenshot, API response) from the worktree code
   (see §11 of workflow-rules).
 - You want to verify that your changes are visible to the containers before
@@ -96,6 +99,16 @@ deux modes coexistent, un projet choisit celui qui convient (ou les deux).
 `.claude/worktree-env.conf.sh` (voir `worktree-env.conf.example.sh`). Sans
 cette variable, `claim`/`release` refusent de démarrer.
 
+**S'applique aussi au repo principal, sans worktree.** La lane partagée
+utilise les ports FIXES du compose de base (pas de remap) — les mêmes que
+ceux d'un `docker compose up` classique lancé directement dans le repo
+principal. Dès que `WT_SHARED_LANE_SERVICES` est configuré pour un projet,
+**plus personne ne doit faire de `docker compose up` "nu"** dans le repo
+principal : il faut aussi passer par `claim`/`release`, exactement comme
+depuis un worktree (mécaniquement identique — `WT_TOPLEVEL` vaut alors le
+repo principal lui-même, qui devient un demandeur normal de la file), sous
+peine de collision de ports avec quiconque détient déjà la lane.
+
 ```bash
 # Une fois par machine : démarrer le daemon d'arbitrage
 ~/.claude/skills/worktree-env/worktree-env.sh queue up
@@ -139,6 +152,10 @@ lane si ce worktree la détenait.
 - **Never** touch the shared stack of the principal repo:
   `docker compose restart/stop/up/down` without `--env-file .env.worktree` is
   forbidden. Use only the commands listed above.
+- **Shared lane mode**: once a project has `WT_SHARED_LANE_SERVICES`
+  configured, this also applies to the principal repo itself (no worktree) —
+  use `claim`/`release` there too, never a bare `docker compose up`, since
+  the lane runs on the base compose file's fixed ports.
 - **Never** mutate the shared DB. Worktree volumes are distinct
   (prefixed with `<repo>-wt-<slug>_`); shared fixed-name caches survive `clean`.
 - **Clean up your footprint** at end of task: `stop` (pause, keep volumes — resume
