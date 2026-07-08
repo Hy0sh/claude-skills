@@ -646,6 +646,25 @@ assert_contains "lane block message mentions claim" "claim" "$GUARD_OUT"
 run_guard "$GUARD_LANE" "docker compose ps"
 assert_eq "ps verb (out of scope), shared lane configured -> allowed" "0" "$GUARD_RC"
 
+# --- bug 5 regression guard: bare `docker <verb>` (no "compose") must be
+# caught too -- an agent blocked on `docker compose up` can otherwise
+# route around isolation entirely via `docker update`/`docker restart` on
+# the already-running container.
+run_guard "$GUARD_WT" "docker update --memory 6g gallia-backend"
+assert_eq "bare docker update on a container -> blocked in a worktree" "2" "$GUARD_RC"
+
+run_guard "$GUARD_WT" "docker restart gallia-backend"
+assert_eq "bare docker restart -> blocked in a worktree" "2" "$GUARD_RC"
+
+run_guard "$GUARD_LANE" "docker rm -f gallia-backend"
+assert_eq "bare docker rm -> blocked, shared lane configured" "2" "$GUARD_RC"
+
+run_guard "$GUARD_WT" "docker exec gallia-backend echo hi"
+assert_eq "bare docker exec (out of scope) -> still allowed" "0" "$GUARD_RC"
+
+run_guard "$GUARD_WT" "docker ps"
+assert_eq "bare docker ps (out of scope) -> still allowed" "0" "$GUARD_RC"
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
