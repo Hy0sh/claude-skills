@@ -317,7 +317,26 @@ wt_render_shared_override() {
       rest="${entry#* }"
       e_src="${rest%% *}"
       e_target="${rest#* }"
-      rel="${e_src#./}"
+      # A holder that is a git worktree (not the principal checkout) has a
+      # `.git` FILE (gitdir pointer), never a directory — bind-mounting it
+      # fails on Docker Desktop ("mountpoint is outside of rootfs"). Any base
+      # compose mount targeting `.git` is meaningless for such a holder, so
+      # skip it rather than let `docker compose up` hard-fail the claim.
+      if [[ "$holder_path" != "$WT_PRINCIPAL_ROOT" && "$e_target" == */.git ]]; then
+        continue
+      fi
+      # `docker compose config` always resolves bind sources to an absolute
+      # path (against WT_PRINCIPAL_ROOT, the project directory used for
+      # discovery) — never a "./"-relative one. Strip that absolute prefix
+      # before rejoining onto the holder worktree's path; without this, the
+      # principal root's absolute path was appended after the holder path
+      # (e.g. ".../worktrees/foo//Users/.../gallia-utopia/backend"),
+      # producing a nonexistent bind source and an empty /app in the container.
+      if [[ "$e_src" == "$WT_PRINCIPAL_ROOT"/* ]]; then
+        rel="${e_src#"$WT_PRINCIPAL_ROOT"/}"
+      else
+        rel="${e_src#./}"
+      fi
       body+="      - \"${holder_path}/${rel}:${e_target}\""$'\n'
     done
     if [[ -n "$body" ]]; then
@@ -694,7 +713,7 @@ import json, sys
 d = json.load(sys.stdin)
 holder = d.get("holder")
 if holder:
-    print(f"  Détenteur : {holder[\"worktree\"]} (mode={holder[\"mode\"]})")
+    print(f"  Détenteur : {holder['worktree']} (mode={holder['mode']})")
 else:
     print("  Détenteur : (aucun)")
 q = d.get("queue", [])
