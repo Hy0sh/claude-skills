@@ -1,0 +1,25 @@
+# compose.queue.yaml — runs queue_daemon.py as a lightweight, project-independent
+# container. Started/stopped via `worktree-env.sh queue up` / `queue down`, once
+# per machine. Never touches Docker itself: it only arbitrates which worktree
+# currently holds a project's shared lane (see queue_daemon.py).
+services:
+  queue_daemon:
+    image: python:3.12-alpine
+    container_name: worktree-env-queue-daemon
+    working_dir: /app
+    volumes:
+      - ./queue_daemon.py:/app/queue_daemon.py:ro
+      - queue_state:/data
+    environment:
+      WT_QUEUE_STATE_FILE: /data/queue_state.json
+      # 0.0.0.0 inside the container -- the "127.0.0.1:8765:8765" port
+      # publish below is what actually restricts reachability to localhost.
+      WT_QUEUE_BIND_HOST: "0.0.0.0"
+    ports:
+      - "127.0.0.1:8765:8765"
+    command: ["python3", "/app/queue_daemon.py"]
+    restart: unless-stopped
+
+volumes:
+  queue_state:
+    name: worktree-env-queue-state

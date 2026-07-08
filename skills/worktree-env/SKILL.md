@@ -83,6 +83,52 @@ raw auto-mapping. With it, you can customise:
 Inside a hook, `wt_host_port_for <svc> <container_port>` returns the assigned host port.
 Full annotated template: `~/.claude/skills/worktree-env/worktree-env.conf.example.sh`.
 
+## Mode lane partagée (optionnel, additif)
+
+Alternative au mode isolé par défaut ci-dessus, pour les stacks lourdes (ex.
+~9 services dont plusieurs images buildées) où faire tourner plusieurs
+worktrees en parallèle sature déjà la machine à 2-3 worktrees actifs. Un seul
+jeu de containers applicatifs ("lane") est partagé entre tous les worktrees
+du repo, arbitré par une file d'attente à une place (`queue_daemon.py`) — les
+deux modes coexistent, un projet choisit celui qui convient (ou les deux).
+
+**Prérequis** : le projet doit définir `WT_SHARED_LANE_SERVICES` dans son
+`.claude/worktree-env.conf.sh` (voir `worktree-env.conf.example.sh`). Sans
+cette variable, `claim`/`release` refusent de démarrer.
+
+```bash
+# Une fois par machine : démarrer le daemon d'arbitrage
+~/.claude/skills/worktree-env/worktree-env.sh queue up
+
+# Depuis un worktree : attendre son tour puis obtenir la lane (bloquant)
+~/.claude/skills/worktree-env/worktree-env.sh claim --mode interactive
+# ... travailler, la lane reste montée sur ce worktree ...
+~/.claude/skills/worktree-env/worktree-env.sh release
+
+# Mode test : exécute la commande une fois la lane obtenue, puis relâche
+# automatiquement (pas de heartbeat, pas d'action manuelle après)
+~/.claude/skills/worktree-env/worktree-env.sh claim --mode test -- \
+  docker compose exec backend python manage.py test
+
+# Voir qui détient la lane et qui attend
+~/.claude/skills/worktree-env/worktree-env.sh status
+
+# Arrêter le daemon (une fois par machine, quand plus personne n'en a besoin)
+~/.claude/skills/worktree-env/worktree-env.sh queue down
+```
+
+`claim` bloque jusqu'à obtention (ordre FIFO), puis : crée si besoin la DB
+logique et le bucket du worktree (hooks `wt_project_shared_db_ensure` /
+`wt_project_shared_bucket_ensure`), régénère `compose.override.lane.yaml`
+pour bind-monter `WT_SHARED_LANE_SERVICES` sur le worktree courant, et lance
+`up -d` sur les services d'infra + de lane. En mode `interactive`, un
+heartbeat tourne en tâche de fond tant que `release` n'a pas été appelé ; sans
+heartbeat pendant `WT_SHARED_IDLE_TIMEOUT` (défaut 45 min), la lane est
+libérée automatiquement et attribuée au suivant en file, sans action
+manuelle. `clean` DROP la DB et le bucket du worktree nettoyé (hooks
+`wt_project_shared_db_drop` / `wt_project_shared_bucket_drop`) et libère la
+lane si ce worktree la détenait.
+
 ## Discipline §10 — strict isolation (workflow-rules)
 
 - **Never** touch the shared stack of the principal repo:

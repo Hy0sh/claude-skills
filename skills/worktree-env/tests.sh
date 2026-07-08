@@ -252,6 +252,193 @@ assert_contains "env file has COMPOSE_PROJECT_NAME" "COMPOSE_PROJECT_NAME=myrepo
 assert_contains "env file has WT_BLOCK" "WT_BLOCK=3" "$ENV_CONTENT"
 
 # ---------------------------------------------------------------------------
+# Test suite: wt_render_shared_override — shared lane bind-mount rewriting
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== wt_render_shared_override — bind mounts point to holder worktree ==="
+WT_DISC_SERVICES=(backend frontend db)
+WT_DISC_VOLBIND_ENTRIES=("backend ./backend /app" "frontend ./frontend /app")
+
+SHARED_A=$(wt_render_shared_override "/worktrees/wt-a" backend frontend)
+assert_contains "backend bind-mounted to wt-a" '"/worktrees/wt-a/backend:/app"' "$SHARED_A"
+assert_contains "frontend bind-mounted to wt-a" '"/worktrees/wt-a/frontend:/app"' "$SHARED_A"
+assert_not_contains "db not a lane service, no override emitted" "  db:" "$SHARED_A"
+assert_contains "volumes tagged !override" "volumes: !override" "$SHARED_A"
+
+SHARED_B=$(wt_render_shared_override "/worktrees/wt-b" backend frontend)
+assert_contains "backend re-pointed to wt-b after re-claim" '"/worktrees/wt-b/backend:/app"' "$SHARED_B"
+assert_not_contains "stale wt-a path gone after re-claim" "/worktrees/wt-a" "$SHARED_B"
+WT_DISC_VOLBIND_ENTRIES=()
+
+# ---------------------------------------------------------------------------
+# Test suite: wt_shared_resource_name — DB/bucket naming convention
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== wt_shared_resource_name — default convention + hook override ==="
+WT_PROJECT_PREFIX="myrepo-wt"
+unset -f wt_project_shared_resource_name 2>/dev/null || true
+assert_eq "default db name"     "myrepo-wt_jazzy" "$(wt_shared_resource_name db jazzy)"
+assert_eq "default bucket name" "myrepo-wt_jazzy" "$(wt_shared_resource_name bucket jazzy)"
+
+wt_project_shared_resource_name() {
+  local kind="$1" slug="$2"
+  printf 'custom_%s_%s' "$kind" "$slug"
+}
+assert_eq "hook overrides naming convention" "custom_db_jazzy" "$(wt_shared_resource_name db jazzy)"
+unset -f wt_project_shared_resource_name
+
+# ---------------------------------------------------------------------------
+# Queue daemon integration tests — real queue_daemon.py subprocess, no docker.
+# ---------------------------------------------------------------------------
+QUEUE_DAEMON_PID=""
+
+start_queue_daemon() {
+  local port="$1" state_file="$2" watchdog_interval="${3:-1}"
+  WT_QUEUE_PORT="$port" WT_QUEUE_STATE_FILE="$state_file" WT_QUEUE_WATCHDOG_INTERVAL="$watchdog_interval" \
+    python3 "${SCRIPT_DIR}/queue_daemon.py" >/dev/null 2>&1 &
+  QUEUE_DAEMON_PID=$!
+  local i=0
+  until curl -sS -f "http://127.0.0.1:${port}/status?repo=__ping__" >/dev/null 2>&1; do
+    sleep 0.2
+    i=$(( i + 1 ))
+    if [[ "$i" -gt 50 ]]; then
+      echo "  ERROR: queue_daemon.py did not start on port ${port}" >&2
+      return 1
+    fi
+  done
+}
+
+stop_queue_daemon() {
+  [[ -n "$QUEUE_DAEMON_PID" ]] && kill "$QUEUE_DAEMON_PID" 2>/dev/null || true
+  wait "$QUEUE_DAEMON_PID" 2>/dev/null || true
+  QUEUE_DAEMON_PID=""
+}
+
+echo ""
+echo "=== queue_daemon — FIFO ordering between two concurrent claims ==="
+QSTATE_FIFO="${TMPDIR_BASE}/queue_state_fifo.json"
+start_queue_daemon 18765 "$QSTATE_FIFO" 1
+WT_QUEUE_PORT=18765
+
+wt_queue_claim "testrepo" "wt-a" "interactive" "2700"
+STATUS1=$(wt_queue_status_json "testrepo")
+assert_contains "wt-a granted immediately (no prior holder)" '"worktree": "wt-a"' "$STATUS1"
+
+wt_queue_claim "testrepo" "wt-b" "interactive" "2700" >/dev/null &
+CLAIM_B_PID=$!
+sleep 0.5
+STATUS2=$(wt_queue_status_json "testrepo")
+assert_contains "wt-a still holder while wt-b waits" '"worktree": "wt-a"' "$STATUS2"
+assert_contains "wt-b queued behind wt-a" '"wt-b"' "$STATUS2"
+
+wt_queue_release "testrepo" "wt-a"
+wait "$CLAIM_B_PID"
+STATUS3=$(wt_queue_status_json "testrepo")
+assert_contains "wt-b becomes holder in FIFO order after wt-a releases" '"worktree": "wt-b"' "$STATUS3"
+
+stop_queue_daemon
+
+echo ""
+echo "=== queue_daemon — idle timeout auto-releases an inactive interactive holder ==="
+QSTATE_TIMEOUT="${TMPDIR_BASE}/queue_state_timeout.json"
+start_queue_daemon 18766 "$QSTATE_TIMEOUT" 1
+WT_QUEUE_PORT=18766
+
+wt_queue_claim "repo2" "wt-x" "interactive" "1"   # idle_timeout=1s, no heartbeat sent
+wt_queue_claim "repo2" "wt-y" "interactive" "2700" >/dev/null &
+CLAIM_Y_PID=$!
+sleep 3   # > idle_timeout(1s) + watchdog sweep interval(1s)
+wait "$CLAIM_Y_PID"
+STATUS_TIMEOUT=$(wt_queue_status_json "repo2")
+assert_contains "wt-y granted after wt-x's idle timeout elapses, no manual action" '"worktree": "wt-y"' "$STATUS_TIMEOUT"
+
+stop_queue_daemon
+
+echo ""
+echo "=== queue_daemon — heartbeat keeps a holder from being timed out ==="
+QSTATE_HB="${TMPDIR_BASE}/queue_state_heartbeat.json"
+start_queue_daemon 18767 "$QSTATE_HB" 1
+WT_QUEUE_PORT=18767
+
+wt_queue_claim "repo3" "wt-z" "interactive" "2"   # idle_timeout=2s
+( for _ in 1 2 3 4 5; do sleep 0.5; wt_queue_heartbeat "repo3" "wt-z" >/dev/null 2>&1 || true; done ) &
+HB_PID=$!
+sleep 3
+STATUS_HB=$(wt_queue_status_json "repo3")
+assert_contains "wt-z still holder thanks to heartbeats" '"worktree": "wt-z"' "$STATUS_HB"
+wait "$HB_PID" 2>/dev/null || true
+
+stop_queue_daemon
+
+# ---------------------------------------------------------------------------
+# Test suite: cmd_clean — shared-mode lane release + DB/bucket drop hooks
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== cmd_clean — releases a held lane and calls DB/bucket drop hooks ==="
+
+CLEAN_PRINCIPAL="${TMPDIR_BASE}/clean_principal"
+mkdir -p "${CLEAN_PRINCIPAL}/backend"
+git -C "$CLEAN_PRINCIPAL" init -q
+git -C "$CLEAN_PRINCIPAL" config user.email test@test.com
+git -C "$CLEAN_PRINCIPAL" config user.name test
+cat > "${CLEAN_PRINCIPAL}/compose.yaml" <<'YAML'
+services:
+  backend:
+    image: python:3.12-alpine
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+  db:
+    image: postgres:16-alpine
+YAML
+touch "${CLEAN_PRINCIPAL}/backend/.keep"
+git -C "$CLEAN_PRINCIPAL" add -A
+git -C "$CLEAN_PRINCIPAL" commit -q -m init
+
+CLEAN_WT="${TMPDIR_BASE}/clean_worktree"
+git -C "$CLEAN_PRINCIPAL" worktree add -q -b clean-test-branch "$CLEAN_WT" >/dev/null
+
+QSTATE_CLEAN="${TMPDIR_BASE}/queue_state_clean.json"
+start_queue_daemon 18768 "$QSTATE_CLEAN" 1
+WT_QUEUE_PORT=18768
+
+DOCKER_CALLS_LOG="${TMPDIR_BASE}/docker_calls.log"
+: > "$DOCKER_CALLS_LOG"
+docker() {
+  echo "docker $*" >> "$DOCKER_CALLS_LOG"
+  return 0
+}
+
+DB_DROP_LOG="${TMPDIR_BASE}/db_drop.log"
+BUCKET_DROP_LOG="${TMPDIR_BASE}/bucket_drop.log"
+: > "$DB_DROP_LOG"; : > "$BUCKET_DROP_LOG"
+wt_project_shared_db_drop()     { echo "DROP DB $1" >> "$DB_DROP_LOG"; }
+wt_project_shared_bucket_drop() { echo "DROP BUCKET $1" >> "$BUCKET_DROP_LOG"; }
+
+ORIG_PWD="$PWD"
+cd "$CLEAN_WT"
+unset WT_PROJECT_PREFIX   # avoid leaking the prefix set by the naming-convention suite above
+wt_resolve_context
+WT_SHARED_LANE_SERVICES=(backend)
+CLEAN_SLUG=$(basename "$WT_TOPLEVEL")
+wt_queue_claim "$WT_REPO_BASENAME" "$CLEAN_SLUG" "interactive" "2700"
+
+cmd_clean
+
+cd "$ORIG_PWD"
+
+STATUS_CLEAN=$(WT_QUEUE_PORT=18768 wt_queue_status_json "$WT_REPO_BASENAME")
+assert_contains "lane released by clean (holder now null)" '"holder": null' "$STATUS_CLEAN"
+assert_contains "clean tore down the lane via docker compose down" "down" "$(cat "$DOCKER_CALLS_LOG")"
+assert_contains "db drop hook called with per-worktree name" "DROP DB clean_principal-wt_${CLEAN_SLUG}" "$(cat "$DB_DROP_LOG")"
+assert_contains "bucket drop hook called with per-worktree name" "DROP BUCKET clean_principal-wt_${CLEAN_SLUG}" "$(cat "$BUCKET_DROP_LOG")"
+
+unset -f docker wt_project_shared_db_drop wt_project_shared_bucket_drop
+unset WT_SHARED_LANE_SERVICES
+stop_queue_daemon
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

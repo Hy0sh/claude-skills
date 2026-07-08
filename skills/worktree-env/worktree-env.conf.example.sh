@@ -48,3 +48,53 @@ wt_project_service_extra() {
 #   local block_base="$1"
 #   printf 'Frontend: http://localhost:%s\n' "$(wt_host_port_for frontend 3000)"
 # }
+
+# --- Shared lane mode (optional, additive) ----------------------------------
+# Alternative to the isolated-per-worktree mode above: ONE lane of containers
+# shared across all worktrees of this repo, arbitrated by queue_daemon.py
+# (`worktree-env.sh claim` / `release` / `queue up|down`). Use on heavy
+# stacks where running several isolated worktree stacks in parallel already
+# saturates the machine. Setting WT_SHARED_LANE_SERVICES is what opts a
+# project into this mode; everything else here is optional.
+
+# Services started once per machine via `claim`, never swapped between
+# worktrees (DB, object storage, mailcatcher, ...).
+# WT_SHARED_INFRA_SERVICES=(db rustfs mailhog pgadmin)
+
+# Services bind-mounted onto the current lane holder by `claim` (no port
+# remap: shared lane mode always uses the base compose file's fixed ports).
+# WT_SHARED_LANE_SERVICES=(backend celery_worker celery_beat frontend)
+
+# Seconds without a heartbeat before an interactive `claim` is auto-released
+# and the lane handed to the next worktree in the FIFO queue. Default 2700 (45min).
+# WT_SHARED_IDLE_TIMEOUT=2700
+
+# Naming convention for the per-worktree logical DB and bucket that `claim`
+# ensures exist (and `clean` drops). Default: "${WT_PROJECT_PREFIX}_<slug>"
+# for both kinds. Override only if a project needs a different convention.
+# wt_project_shared_resource_name() {
+#   local kind="$1" slug="$2"   # kind: "db" or "bucket"
+#   printf '%s_%s' "$WT_PROJECT_PREFIX" "$slug"
+# }
+
+# Ensure the per-worktree logical DB / bucket exist (idempotent). Run by
+# `claim` before bringing the lane up. Without these hooks, `claim` skips
+# provisioning and the project is responsible for it another way.
+# wt_project_shared_db_ensure() {
+#   local db_name="$1"
+#   wt_compose_lane exec -T db createdb -U postgres "$db_name" 2>/dev/null || true
+# }
+# wt_project_shared_bucket_ensure() {
+#   local bucket_name="$1"
+#   wt_compose_lane exec -T rustfs mc mb "local/${bucket_name}" 2>/dev/null || true
+# }
+
+# Drop the per-worktree logical DB / bucket. Run by `clean`.
+# wt_project_shared_db_drop() {
+#   local db_name="$1"
+#   wt_compose_lane exec -T db dropdb -U postgres --if-exists "$db_name"
+# }
+# wt_project_shared_bucket_drop() {
+#   local bucket_name="$1"
+#   wt_compose_lane exec -T rustfs mc rb --force "local/${bucket_name}"
+# }

@@ -17,6 +17,14 @@
 #   worktree-env.sh clean              -- force-remove current worktree's containers +
 #                                         volumes + ghosts from a failed up
 #
+# Shared lane mode (additive, opt-in via WT_SHARED_LANE_SERVICES -- see
+# worktree-env.conf.example.sh): one lane of containers shared across all
+# worktrees of a repo, arbitrated by queue_daemon.py.
+#   worktree-env.sh claim [--mode test|interactive] [-- <command...>]
+#                                       -- block until the lane is granted, bring it up
+#   worktree-env.sh release            -- explicit teardown of a held lane
+#   worktree-env.sh queue up|down      -- start/stop the queue daemon (once per machine)
+#
 # Pure functions (wt_alloc_block, wt_parse_compose_json, wt_render_override, …)
 # are sourced by tests.sh without executing main.
 
@@ -29,10 +37,18 @@ set -euo pipefail
 : "${WT_BLOCK_SIZE:=20}"      # ports per block (auto-bumped if more are discovered)
 : "${WT_ENV_FILES:=}"         # files provisioned from principal into the worktree
 
+# Shared lane mode defaults (see queue_daemon.py + `claim`/`release`/`queue`).
+# WT_SHARED_INFRA_SERVICES / WT_SHARED_LANE_SERVICES have no default: unset
+# means the project has not opted into shared lane mode.
+: "${WT_SHARED_IDLE_TIMEOUT:=2700}"        # seconds without heartbeat before auto-release (interactive)
+: "${WT_SHARED_HEARTBEAT_INTERVAL:=60}"    # seconds between heartbeats while a claim is held (interactive)
+: "${WT_QUEUE_PORT:=8765}"                 # fixed local port of queue_daemon.py
+
 # Discovery globals (populated by wt_discover; set directly in tests).
 WT_DISC_SERVICES=()
 WT_DISC_CNAME_SERVICES=()
 WT_DISC_PORT_ENTRIES=()       # entries: "<service> <container_port>"
+WT_DISC_VOLBIND_ENTRIES=()    # entries: "<service> <bind source> <container target>"
 WT_RENDER_BLOCK_BASE=0        # block_base of the last render (for wt_host_port_for)
 
 # ---------------------------------------------------------------------------
@@ -93,9 +109,10 @@ wt_alloc_block() {
 # ---------------------------------------------------------------------------
 # Pure function: parse `docker compose config --format json` (read on stdin)
 # into flat lines:
-#   SVC <name>            -- every service, sorted
-#   CNAME <name>          -- services with a hardcoded container_name
-#   PORT <name> <target>  -- one per published port, using the CONTAINER port
+#   SVC <name>                     -- every service, sorted
+#   CNAME <name>                   -- services with a hardcoded container_name
+#   PORT <name> <target>           -- one per published port, using the CONTAINER port
+#   VOLBIND <name> <source> <target> -- one per bind-mount volume (skips named volumes)
 # Deterministic ordering -> stable port-block indices -> predictable URLs.
 # ---------------------------------------------------------------------------
 wt_parse_compose_json() {
@@ -114,6 +131,10 @@ for name in sorted(services):
         target = port.get("target")
         if target is not None:
             print(f"PORT {name} {target}")
+for name in sorted(services):
+    for vol in services[name].get("volumes", []):
+        if vol.get("type") == "bind" and vol.get("source") and vol.get("target"):
+            print("VOLBIND {} {} {}".format(name, vol["source"], vol["target"]))
 '
 }
 
@@ -146,14 +167,15 @@ wt_discover() {
     return 1
   }
 
-  WT_DISC_SERVICES=(); WT_DISC_CNAME_SERVICES=(); WT_DISC_PORT_ENTRIES=()
+  WT_DISC_SERVICES=(); WT_DISC_CNAME_SERVICES=(); WT_DISC_PORT_ENTRIES=(); WT_DISC_VOLBIND_ENTRIES=()
   local line kind
   while IFS= read -r line; do
     kind="${line%% *}"
     case "$kind" in
-      SVC)   WT_DISC_SERVICES+=("${line#SVC }") ;;
-      CNAME) WT_DISC_CNAME_SERVICES+=("${line#CNAME }") ;;
-      PORT)  WT_DISC_PORT_ENTRIES+=("${line#PORT }") ;;
+      SVC)     WT_DISC_SERVICES+=("${line#SVC }") ;;
+      CNAME)   WT_DISC_CNAME_SERVICES+=("${line#CNAME }") ;;
+      PORT)    WT_DISC_PORT_ENTRIES+=("${line#PORT }") ;;
+      VOLBIND) WT_DISC_VOLBIND_ENTRIES+=("${line#VOLBIND }") ;;
     esac
   done < <(printf '%s' "$json" | wt_parse_compose_json)
 }
@@ -245,6 +267,123 @@ wt_render_override() {
       printf 'volumes:\n%s\n' "$vols"
     fi
   fi
+}
+
+# ---------------------------------------------------------------------------
+# Shared lane mode -- render compose.override.lane.yaml: for each lane service
+# (WT_SHARED_LANE_SERVICES), rewrite its bind-mount volumes to point at the
+# CURRENT HOLDER worktree's absolute path instead of the base compose's path.
+# No port remap: shared lane mode uses one fixed set of ports, ever.
+#   $1    -- absolute path of the current holder worktree
+#   $2... -- lane service names (WT_SHARED_LANE_SERVICES)
+# Reads WT_DISC_SERVICES / WT_DISC_VOLBIND_ENTRIES (populated by wt_discover).
+# ---------------------------------------------------------------------------
+wt_render_shared_override() {
+  local holder_path="$1"; shift
+  local -a lane_services=("$@")
+  local svc entry e_svc rest e_src e_target rel body
+
+  printf '%s\n' \
+    "# Auto-generated by worktree-env.sh -- do not edit manually." \
+    "# Regenerated on each 'claim'. Gitignored (.git/info/exclude)." \
+    "services:"
+
+  for svc in "${lane_services[@]+"${lane_services[@]}"}"; do
+    _wt_in_list "$svc" "${WT_DISC_SERVICES[@]+"${WT_DISC_SERVICES[@]}"}" || continue
+    body=""
+    for entry in "${WT_DISC_VOLBIND_ENTRIES[@]+"${WT_DISC_VOLBIND_ENTRIES[@]}"}"; do
+      e_svc="${entry%% *}"
+      [[ "$e_svc" == "$svc" ]] || continue
+      rest="${entry#* }"
+      e_src="${rest%% *}"
+      e_target="${rest#* }"
+      rel="${e_src#./}"
+      body+="      - \"${holder_path}/${rel}:${e_target}\""$'\n'
+    done
+    if [[ -n "$body" ]]; then
+      printf '  %s:\n    volumes: !override\n%s\n' "$svc" "$body"
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------
+# Shared lane mode -- DB/bucket naming convention for a worktree slug. Default
+# `${WT_PROJECT_PREFIX}_<slug>`, overridable via the project hook
+# `wt_project_shared_resource_name <kind> <slug>` (kind: "db" or "bucket").
+# ---------------------------------------------------------------------------
+wt_shared_resource_name() {
+  local kind="$1" slug="$2"
+  if declare -F wt_project_shared_resource_name >/dev/null; then
+    wt_project_shared_resource_name "$kind" "$slug"
+  else
+    printf '%s_%s' "$WT_PROJECT_PREFIX" "$slug"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Shared lane mode -- write .env.worktree-lane in the principal repo (the
+# lane's compose project is not tied to any single worktree, unlike
+# .env.worktree which is per-worktree).
+# ---------------------------------------------------------------------------
+wt_write_lane_env_file() {
+  local dir="$1" project_name="$2"
+  {
+    printf '# Auto-generated by worktree-env.sh -- do not edit manually.\n'
+    printf 'COMPOSE_PROJECT_NAME=%s\n' "$project_name"
+  } > "${dir}/.env.worktree-lane"
+}
+
+# ---------------------------------------------------------------------------
+# Shared lane mode -- docker compose invocation scoped to the fixed lane
+# project (rooted at the PRINCIPAL repo, not the calling worktree).
+# ---------------------------------------------------------------------------
+wt_compose_lane() {
+  local base
+  base=$(wt_find_base_compose "$WT_PRINCIPAL_ROOT") || return 1
+  docker compose \
+    -f "$base" \
+    -f "${WT_PRINCIPAL_ROOT}/compose.override.lane.yaml" \
+    --project-directory "$WT_PRINCIPAL_ROOT" \
+    --env-file "${WT_PRINCIPAL_ROOT}/.env.worktree-lane" \
+    "$@"
+}
+
+# ---------------------------------------------------------------------------
+# Shared lane mode -- thin HTTP client for queue_daemon.py. All calls fail
+# (non-zero) if the daemon is unreachable or returns a non-2xx status.
+# ---------------------------------------------------------------------------
+wt_queue_url() {
+  printf 'http://127.0.0.1:%s' "${WT_QUEUE_PORT}"
+}
+
+# Blocks until the lane is granted to (repo, worktree). No client-side
+# timeout by design: this call waits as long as it takes to reach the front
+# of the FIFO queue.
+wt_queue_claim() {
+  local repo="$1" worktree="$2" mode="$3" idle_timeout="$4" payload
+  payload=$(python3 -c '
+import json, sys
+print(json.dumps({"repo": sys.argv[1], "worktree": sys.argv[2], "mode": sys.argv[3], "idle_timeout": int(sys.argv[4])}))
+' "$repo" "$worktree" "$mode" "$idle_timeout")
+  curl -sS -f -X POST -H 'Content-Type: application/json' -d "$payload" "$(wt_queue_url)/claim" >/dev/null
+}
+
+wt_queue_heartbeat() {
+  local repo="$1" worktree="$2" payload
+  payload=$(python3 -c 'import json, sys; print(json.dumps({"repo": sys.argv[1], "worktree": sys.argv[2]}))' "$repo" "$worktree")
+  curl -sS -f -m 5 -X POST -H 'Content-Type: application/json' -d "$payload" "$(wt_queue_url)/heartbeat" >/dev/null
+}
+
+wt_queue_release() {
+  local repo="$1" worktree="$2" payload
+  payload=$(python3 -c 'import json, sys; print(json.dumps({"repo": sys.argv[1], "worktree": sys.argv[2]}))' "$repo" "$worktree")
+  curl -sS -f -m 5 -X POST -H 'Content-Type: application/json' -d "$payload" "$(wt_queue_url)/release" >/dev/null
+}
+
+wt_queue_status_json() {
+  local repo="$1" encoded
+  encoded=$(python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))' "$repo")
+  curl -sS -f -m 5 "$(wt_queue_url)/status?repo=${encoded}"
 }
 
 # ---------------------------------------------------------------------------
@@ -458,7 +597,36 @@ cmd_status() {
   done < <(docker compose ls --all --format '{{.Name}}' 2>/dev/null)
 
   [[ "$found" -eq 0 ]] && printf '  (aucun)\n'
+
+  if [[ -n "${WT_SHARED_LANE_SERVICES+x}" ]]; then
+    printf '\nLane partagée (%s):\n' "$WT_REPO_BASENAME"
+    wt_print_queue_status "$WT_REPO_BASENAME"
+  fi
+
   return 0
+}
+
+# ---------------------------------------------------------------------------
+# Shared lane mode -- print the daemon's holder + queue for a repo. Used by
+# `status`. Degrades gracefully (does not fail `status`) if the daemon is down.
+# ---------------------------------------------------------------------------
+wt_print_queue_status() {
+  local repo="$1" json
+  json=$(wt_queue_status_json "$repo") || {
+    printf '  (daemon de file injoignable -- "queue up" ?)\n'
+    return 0
+  }
+  printf '%s' "$json" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+holder = d.get("holder")
+if holder:
+    print(f"  Détenteur : {holder[\"worktree\"]} (mode={holder[\"mode\"]})")
+else:
+    print("  Détenteur : (aucun)")
+q = d.get("queue", [])
+print("  File      : " + (", ".join(x["worktree"] for x in q) if q else "(vide)"))
+'
 }
 
 # ---------------------------------------------------------------------------
@@ -500,6 +668,139 @@ cmd_down() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: claim — block until the shared lane is granted to this
+# worktree, then bring up infra + lane services bind-mounted onto it.
+#   claim [--mode test|interactive] [-- <command...>]
+# ---------------------------------------------------------------------------
+cmd_claim() {
+  local mode="interactive"
+  local -a test_cmd=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --mode) mode="$2"; shift 2 ;;
+      --) shift; test_cmd=("$@"); break ;;
+      *)
+        printf 'ERROR: unknown argument to claim: %s\n' "$1" >&2
+        return 1
+        ;;
+    esac
+  done
+
+  if [[ "$mode" != "interactive" && "$mode" != "test" ]]; then
+    printf 'ERROR: --mode must be "interactive" or "test" (got: %s)\n' "$mode" >&2
+    return 1
+  fi
+  if [[ "$mode" == "test" && "${#test_cmd[@]}" -eq 0 ]]; then
+    printf 'ERROR: --mode test requires a command after -- \n' >&2
+    return 1
+  fi
+
+  wt_resolve_context || return 1
+  if [[ -z "${WT_SHARED_LANE_SERVICES+x}" ]]; then
+    printf 'ERROR: WT_SHARED_LANE_SERVICES not set — this project has no shared lane config.\n' >&2
+    return 1
+  fi
+
+  wt_discover "$WT_PRINCIPAL_ROOT" || return 1
+
+  local slug idle_timeout
+  slug=$(basename "$WT_TOPLEVEL")
+  idle_timeout="${WT_SHARED_IDLE_TIMEOUT}"
+
+  printf 'Requesting shared lane for %s (repo=%s, mode=%s)... waiting for turn.\n' "$slug" "$WT_REPO_BASENAME" "$mode" >&2
+  wt_queue_claim "$WT_REPO_BASENAME" "$slug" "$mode" "$idle_timeout" || {
+    printf 'ERROR: queue daemon unreachable — start it with "%s queue up".\n' "$(basename "$0")" >&2
+    return 1
+  }
+  printf 'Lane granted to %s.\n' "$slug" >&2
+
+  local db_name bucket_name
+  db_name=$(wt_shared_resource_name db "$slug")
+  bucket_name=$(wt_shared_resource_name bucket "$slug")
+  if declare -F wt_project_shared_db_ensure >/dev/null; then
+    wt_project_shared_db_ensure "$db_name" || printf 'WARNING: db ensure hook failed — see messages above.\n' >&2
+  fi
+  if declare -F wt_project_shared_bucket_ensure >/dev/null; then
+    wt_project_shared_bucket_ensure "$bucket_name" || printf 'WARNING: bucket ensure hook failed — see messages above.\n' >&2
+  fi
+
+  wt_write_lane_env_file "$WT_PRINCIPAL_ROOT" "${WT_PROJECT_PREFIX}-lane"
+  wt_render_shared_override "$WT_TOPLEVEL" "${WT_SHARED_LANE_SERVICES[@]}" > "${WT_PRINCIPAL_ROOT}/compose.override.lane.yaml"
+
+  if ! wt_compose_lane up -d "${WT_SHARED_INFRA_SERVICES[@]+"${WT_SHARED_INFRA_SERVICES[@]}"}" "${WT_SHARED_LANE_SERVICES[@]}"; then
+    printf 'ERROR: docker compose up failed — releasing the lane immediately.\n' >&2
+    wt_queue_release "$WT_REPO_BASENAME" "$slug" || true
+    return 1
+  fi
+
+  printf '\nShared lane active — %s now bind-mounted to %s.\n' "${WT_SHARED_LANE_SERVICES[*]}" "$slug" >&2
+
+  if [[ "$mode" == "test" ]]; then
+    printf 'Running: %s\n' "${test_cmd[*]}" >&2
+    local exit_code=0
+    "${test_cmd[@]}" || exit_code=$?
+    wt_compose_lane down "${WT_SHARED_LANE_SERVICES[@]}" || true
+    wt_queue_release "$WT_REPO_BASENAME" "$slug" || true
+    return "$exit_code"
+  fi
+
+  # Interactive mode: background heartbeat until an explicit `release`, or
+  # until the daemon times this holder out from inactivity.
+  ( while sleep "${WT_SHARED_HEARTBEAT_INTERVAL}"; do
+      wt_queue_heartbeat "$WT_REPO_BASENAME" "$slug" >/dev/null 2>&1 || true
+    done ) &
+  disown
+  echo "$!" > "${WT_TOPLEVEL}/.worktree-env-heartbeat.pid"
+
+  printf 'Run "%s release" when done.\n' "$(basename "$0")" >&2
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: release — explicit teardown of a held shared lane.
+# ---------------------------------------------------------------------------
+cmd_release() {
+  wt_resolve_context || return 1
+  if [[ -z "${WT_SHARED_LANE_SERVICES+x}" ]]; then
+    printf 'ERROR: WT_SHARED_LANE_SERVICES not set — nothing to release.\n' >&2
+    return 1
+  fi
+
+  local slug pid_file
+  slug=$(basename "$WT_TOPLEVEL")
+  pid_file="${WT_TOPLEVEL}/.worktree-env-heartbeat.pid"
+
+  if [[ -f "$pid_file" ]]; then
+    kill "$(cat "$pid_file")" 2>/dev/null || true
+    rm -f "$pid_file"
+  fi
+
+  wt_compose_lane down "${WT_SHARED_LANE_SERVICES[@]}" || true
+  wt_queue_release "$WT_REPO_BASENAME" "$slug"
+  printf 'Lane released.\n' >&2
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: queue up|down — start/stop the queue daemon (one per machine,
+# independent of any worktree or project).
+# ---------------------------------------------------------------------------
+cmd_queue() {
+  local sub="${1:-}"
+  case "$sub" in
+    up)
+      docker compose -f "${SCRIPT_DIR}/compose.queue.yaml" -p worktree-env-queue up -d
+      ;;
+    down)
+      docker compose -f "${SCRIPT_DIR}/compose.queue.yaml" -p worktree-env-queue down
+      ;;
+    *)
+      printf 'Usage: %s queue <up|down>\n' "$(basename "$0")" >&2
+      return 1
+      ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
 # Subcommand: clean — scoped to the CURRENT worktree only (never other
 # worktrees or shared infra, per workflow-rules §10).
 # ---------------------------------------------------------------------------
@@ -523,6 +824,34 @@ cmd_clean() {
   docker network ls -q --filter "label=com.docker.compose.project=${project_name}" 2>/dev/null \
     | xargs -r docker network rm 2>/dev/null || true
 
+  if [[ -n "${WT_SHARED_LANE_SERVICES+x}" ]]; then
+    local db_name bucket_name status_json holder_wt
+    db_name=$(wt_shared_resource_name db "$slug")
+    bucket_name=$(wt_shared_resource_name bucket "$slug")
+
+    status_json=$(wt_queue_status_json "$WT_REPO_BASENAME" 2>/dev/null || printf '{}')
+    holder_wt=$(printf '%s' "$status_json" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+h = d.get("holder")
+print(h["worktree"] if h else "")
+' 2>/dev/null || printf '')
+
+    if [[ "$holder_wt" == "$slug" ]]; then
+      printf 'Releasing shared lane held by this worktree...\n' >&2
+      rm -f "${WT_TOPLEVEL}/.worktree-env-heartbeat.pid"
+      wt_compose_lane down "${WT_SHARED_LANE_SERVICES[@]}" 2>/dev/null || true
+      wt_queue_release "$WT_REPO_BASENAME" "$slug" || true
+    fi
+
+    if declare -F wt_project_shared_db_drop >/dev/null; then
+      wt_project_shared_db_drop "$db_name" || printf 'WARNING: db drop hook failed — see messages above.\n' >&2
+    fi
+    if declare -F wt_project_shared_bucket_drop >/dev/null; then
+      wt_project_shared_bucket_drop "$bucket_name" || printf 'WARNING: bucket drop hook failed — see messages above.\n' >&2
+    fi
+  fi
+
   printf 'Done.\n' >&2
 }
 
@@ -531,7 +860,7 @@ cmd_clean() {
 # ---------------------------------------------------------------------------
 main() {
   if [[ $# -eq 0 ]]; then
-    printf 'Usage: %s <up [services...]|status|stop|down|clean>\n' "$(basename "$0")" >&2
+    printf 'Usage: %s <up [services...]|status|stop|down|clean|claim [--mode test|interactive] [-- cmd...]|release|queue up|down>\n' "$(basename "$0")" >&2
     exit 1
   fi
 
@@ -539,14 +868,17 @@ main() {
   shift
 
   case "$cmd" in
-    up)     cmd_up "$@" ;;
-    status) cmd_status ;;
-    stop)   cmd_stop ;;
-    down)   cmd_down ;;
-    clean)  cmd_clean ;;
+    up)      cmd_up "$@" ;;
+    status)  cmd_status ;;
+    stop)    cmd_stop ;;
+    down)    cmd_down ;;
+    clean)   cmd_clean ;;
+    claim)   cmd_claim "$@" ;;
+    release) cmd_release ;;
+    queue)   cmd_queue "$@" ;;
     *)
       printf 'Unknown command: %s\n' "$cmd" >&2
-      printf 'Usage: %s <up [services...]|status|stop|down|clean>\n' "$(basename "$0")" >&2
+      printf 'Usage: %s <up [services...]|status|stop|down|clean|claim [--mode test|interactive] [-- cmd...]|release|queue up|down>\n' "$(basename "$0")" >&2
       exit 1
       ;;
   esac
