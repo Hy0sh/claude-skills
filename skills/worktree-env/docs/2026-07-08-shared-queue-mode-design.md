@@ -88,12 +88,18 @@ machine, indépendant de tout worktree particulier).
 
 **Moteur (`worktree-env.sh`, nouvelles sous-commandes)**
 - `claim [--mode test|interactive]` — appelle `/claim`, bloque jusqu'à
-  obtenir la lane, puis : s'assure que la DB logique et le bucket du
-  worktree existent (les crée sinon), régénère `compose.override.yaml`
-  pour que les services de `WT_SHARED_LANE_SERVICES` bind-montent le
-  worktree courant, lance `docker compose up -d` sur ces services. Pas de
-  calcul de bloc de ports (une seule lane active à la fois) : les ports
-  fixes du compose de base suffisent.
+  obtenir la lane, puis dans cet ordre : démarre `WT_SHARED_INFRA_SERVICES`
+  (`docker compose up -d`) et attend qu'ils soient rapportés "running" par
+  compose (retry court générique, ~10s) avant d'aller plus loin — sinon les
+  hooks `_ensure` suivants, qui font un `exec` dans `db`/`rustfs`, échouent
+  au tout premier `claim` sur une machine où l'infra n'a jamais tourné ;
+  s'assure ensuite que la DB logique et le bucket du worktree existent (les
+  crée sinon), régénère `compose.override.yaml` pour que les services de
+  `WT_SHARED_LANE_SERVICES` bind-montent le worktree courant et reçoivent
+  les variables d'environnement du hook `wt_project_shared_lane_env` (DB
+  logique, bucket — voir plus bas), puis lance `docker compose up -d` sur
+  ces services. Pas de calcul de bloc de ports (une seule lane active à la
+  fois) : les ports fixes du compose de base suffisent.
 - `release` — `docker compose down` sur la lane, puis `POST /release`.
 - `status` (étendu) — inclut l'état de la file si le projet est configuré
   en mode partagé.
@@ -114,14 +120,25 @@ dans son mécanisme, deux nouvelles variables optionnelles)**
   pour la DB, même schéma pour le bucket) ; overridable via un hook
   `wt_project_shared_resource_name <kind> <slug>` si un projet a une
   convention différente.
+- `wt_project_shared_lane_env <svc> <db_name> <bucket_name>` (optionnel) —
+  point d'extension générique pour injecter les variables d'environnement
+  propres au projet (le moteur ne connaît pas `DB_NAME`/
+  `AWS_STORAGE_BUCKET_NAME` par nature) sur un service de la lane, en lignes
+  `CLE=valeur` (une par ligne, stdout). Sans hook défini, aucune variable
+  n'est injectée (comportement inchangé). Fusionné dans le même mapping YAML
+  de service que le bloc `volumes: !override` déjà généré — pas de clé de
+  service dupliquée dans `compose.override.lane.yaml`.
 
 ## Flux
 
 **Mode interactif**
 1. `worktree-env.sh claim --mode interactive` (depuis le worktree) → bloque
    jusqu'à obtention de la lane.
-2. Accordée → DB/bucket du worktree créés si absents, `compose.override.yaml`
-   régénéré, `docker compose up -d` sur `WT_SHARED_LANE_SERVICES`.
+2. Accordée → infra (`WT_SHARED_INFRA_SERVICES`) démarrée et attendue
+   "running" en premier, puis DB/bucket du worktree créés si absents,
+   `compose.override.lane.yaml` régénéré (bind-mounts + variables
+   d'environnement du hook `wt_project_shared_lane_env`), `docker compose
+   up -d` sur `WT_SHARED_LANE_SERVICES`.
 3. Heartbeat toutes les 60 s tant que le process vit.
 4. `worktree-env.sh release` (explicite) ou timeout d'inactivité (défaut
    45 min sans heartbeat, configurable via `WT_SHARED_IDLE_TIMEOUT`) →

@@ -117,11 +117,16 @@ cette variable, `claim`/`release` refusent de démarrer.
 ~/.claude/skills/worktree-env/worktree-env.sh queue down
 ```
 
-`claim` bloque jusqu'à obtention (ordre FIFO), puis : crée si besoin la DB
+`claim` bloque jusqu'à obtention (ordre FIFO), puis : démarre l'infra
+(`WT_SHARED_INFRA_SERVICES`) et attend qu'elle soit "running" (sinon les
+hooks suivants, qui `exec` dans `db`/`rustfs`, échouent au tout premier
+`claim` sur une machine où l'infra n'a jamais tourné), crée si besoin la DB
 logique et le bucket du worktree (hooks `wt_project_shared_db_ensure` /
 `wt_project_shared_bucket_ensure`), régénère `compose.override.lane.yaml`
-pour bind-monter `WT_SHARED_LANE_SERVICES` sur le worktree courant, et lance
-`up -d` sur les services d'infra + de lane. En mode `interactive`, un
+pour bind-monter `WT_SHARED_LANE_SERVICES` sur le worktree courant et leur
+injecter les variables d'environnement du hook `wt_project_shared_lane_env`
+(DB logique, bucket — sans ce hook, aucune variable n'est injectée), et
+lance `up -d` sur les services de lane. En mode `interactive`, un
 heartbeat tourne en tâche de fond tant que `release` n'a pas été appelé ; sans
 heartbeat pendant `WT_SHARED_IDLE_TIMEOUT` (défaut 45 min), la lane est
 libérée automatiquement et attribuée au suivant en file, sans action

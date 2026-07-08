@@ -259,15 +259,50 @@ echo "=== wt_render_shared_override — bind mounts point to holder worktree ===
 WT_DISC_SERVICES=(backend frontend db)
 WT_DISC_VOLBIND_ENTRIES=("backend ./backend /app" "frontend ./frontend /app")
 
-SHARED_A=$(wt_render_shared_override "/worktrees/wt-a" backend frontend)
+SHARED_A=$(wt_render_shared_override "/worktrees/wt-a" "" "" backend frontend)
 assert_contains "backend bind-mounted to wt-a" '"/worktrees/wt-a/backend:/app"' "$SHARED_A"
 assert_contains "frontend bind-mounted to wt-a" '"/worktrees/wt-a/frontend:/app"' "$SHARED_A"
 assert_not_contains "db not a lane service, no override emitted" "  db:" "$SHARED_A"
 assert_contains "volumes tagged !override" "volumes: !override" "$SHARED_A"
 
-SHARED_B=$(wt_render_shared_override "/worktrees/wt-b" backend frontend)
+SHARED_B=$(wt_render_shared_override "/worktrees/wt-b" "" "" backend frontend)
 assert_contains "backend re-pointed to wt-b after re-claim" '"/worktrees/wt-b/backend:/app"' "$SHARED_B"
 assert_not_contains "stale wt-a path gone after re-claim" "/worktrees/wt-a" "$SHARED_B"
+
+# Without a wt_project_shared_lane_env hook, no environment block is emitted
+# (zero-config regression safety — a project with no such need sees no change).
+assert_not_contains "no environment block without hook" "environment:" "$SHARED_A"
+WT_DISC_VOLBIND_ENTRIES=()
+
+# ---------------------------------------------------------------------------
+# Test suite: wt_render_shared_override — env hook injects DB_NAME/bucket
+# (Bug 1: isolation was rendered in volumes only, never actually applied to
+# the containers because no environment vars were emitted at all.)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== wt_render_shared_override — env hook merges with volumes (single mapping) ==="
+WT_DISC_SERVICES=(backend celery_worker db)
+WT_DISC_VOLBIND_ENTRIES=("backend ./backend /app")
+
+wt_project_shared_lane_env() {
+  local svc="$1" db_name="$2" bucket_name="$3"
+  case "$svc" in
+    backend|celery_worker)
+      printf 'DB_NAME=%s\n' "$db_name"
+      printf 'AWS_STORAGE_BUCKET_NAME=%s\n' "$bucket_name"
+      ;;
+  esac
+}
+
+SHARED_ENV=$(wt_render_shared_override "/worktrees/wt-a" "gallia_wt_a" "gallia-media-wt-a" backend celery_worker)
+assert_contains "DB_NAME injected for backend" 'DB_NAME: "gallia_wt_a"' "$SHARED_ENV"
+assert_contains "bucket name injected for backend" 'AWS_STORAGE_BUCKET_NAME: "gallia-media-wt-a"' "$SHARED_ENV"
+assert_contains "volumes still present alongside env for backend" '"/worktrees/wt-a/backend:/app"' "$SHARED_ENV"
+assert_contains "env-only service (no volbind) still gets env" 'DB_NAME: "gallia_wt_a"' "$SHARED_ENV"
+BACKEND_KEY_COUNT=$(printf '%s\n' "$SHARED_ENV" | grep -c '^  backend:')
+assert_eq "single backend mapping, no duplicated service key" "1" "$BACKEND_KEY_COUNT"
+
+unset -f wt_project_shared_lane_env
 WT_DISC_VOLBIND_ENTRIES=()
 
 # ---------------------------------------------------------------------------
@@ -437,6 +472,70 @@ assert_contains "bucket drop hook called with per-worktree name" "DROP BUCKET cl
 unset -f docker wt_project_shared_db_drop wt_project_shared_bucket_drop
 unset WT_SHARED_LANE_SERVICES
 stop_queue_daemon
+
+# ---------------------------------------------------------------------------
+# Test suite: cmd_claim — infra started (and waited on) BEFORE the _ensure
+# hooks, which are called BEFORE the lane services start (Bug 2: previously
+# the _ensure hooks ran first and `exec`'d into containers that might not
+# exist yet on the first claim on a machine).
+#
+# wt_discover, wt_queue_claim/release and wt_compose_lane are stubbed here —
+# queue FIFO/daemon behavior is already covered above, and no real docker is
+# available in this pure-logic harness. Restored via re-source afterwards.
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== cmd_claim — infra up+ready, then _ensure hooks, then lane up (bug 2) ==="
+
+CLAIM_PRINCIPAL="${TMPDIR_BASE}/claim_principal"
+mkdir -p "$CLAIM_PRINCIPAL"
+git -C "$CLAIM_PRINCIPAL" init -q
+git -C "$CLAIM_PRINCIPAL" config user.email test@test.com
+git -C "$CLAIM_PRINCIPAL" config user.name test
+touch "${CLAIM_PRINCIPAL}/.keep"
+git -C "$CLAIM_PRINCIPAL" add -A
+git -C "$CLAIM_PRINCIPAL" commit -q -m init
+
+CLAIM_WT="${TMPDIR_BASE}/claim_worktree"
+git -C "$CLAIM_PRINCIPAL" worktree add -q -b claim-test-branch "$CLAIM_WT" >/dev/null
+
+CLAIM_ORDER=""
+wt_discover()      { WT_DISC_SERVICES=(); WT_DISC_VOLBIND_ENTRIES=(); }
+wt_queue_claim()   { return 0; }
+wt_queue_release() { return 0; }
+wt_compose_lane() {
+  if [[ "$1" == "up" && "$2" == "-d" ]]; then
+    shift 2
+    if [[ " $* " == *" backend "* ]]; then
+      CLAIM_ORDER+="LANE_UP;"
+    else
+      CLAIM_ORDER+="INFRA_UP;"
+    fi
+  elif [[ "$1" == "ps" ]]; then
+    printf 'db\n'   # reports the infra service already running -> no retry wait
+  elif [[ "$1" == "down" ]]; then
+    CLAIM_ORDER+="LANE_DOWN;"
+  fi
+  return 0
+}
+wt_project_shared_db_ensure()     { CLAIM_ORDER+="ENSURE_DB;"; }
+wt_project_shared_bucket_ensure() { CLAIM_ORDER+="ENSURE_BUCKET;"; }
+
+ORIG_PWD2="$PWD"
+cd "$CLAIM_WT"
+unset WT_PROJECT_PREFIX   # avoid leaking the prefix set by earlier suites
+WT_SHARED_INFRA_SERVICES=(db)
+WT_SHARED_LANE_SERVICES=(backend)
+
+cmd_claim --mode test -- true
+
+cd "$ORIG_PWD2"
+
+assert_eq "infra up -> ensure hooks -> lane up -> lane down" \
+  "INFRA_UP;ENSURE_DB;ENSURE_BUCKET;LANE_UP;LANE_DOWN;" "$CLAIM_ORDER"
+
+unset WT_SHARED_INFRA_SERVICES WT_SHARED_LANE_SERVICES
+# Restore the real wt_discover/wt_queue_*/wt_compose_lane/hooks stubbed above.
+source "${SCRIPT_DIR}/worktree-env.sh"
 
 # ---------------------------------------------------------------------------
 # Summary

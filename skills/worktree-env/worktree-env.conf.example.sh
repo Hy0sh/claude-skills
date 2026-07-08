@@ -89,6 +89,25 @@ wt_project_service_extra() {
 #   wt_compose_lane exec -T rustfs mc mb "local/${bucket_name}" 2>/dev/null || true
 # }
 
+# Env vars to inject into a lane service so isolation is actually applied at
+# runtime -- the per-worktree DB/bucket that `claim` ensures exist above are
+# just names unless the containers are told to use them. The engine doesn't
+# know DB_NAME/AWS_STORAGE_BUCKET_NAME by nature (project-specific), so this
+# hook is the extension point: print "KEY=VALUE" lines (one per line) for a
+# given service; merged into compose.override.lane.yaml's `environment:` for
+# that service, alongside its `volumes: !override` block. Without this hook,
+# no environment vars are injected (containers keep the base compose's fixed
+# values -- fine for a project with nothing to isolate this way).
+# wt_project_shared_lane_env() {
+#   local svc="$1" db_name="$2" bucket_name="$3"
+#   case "$svc" in
+#     backend|celery_worker|celery_beat)
+#       printf 'DB_NAME=%s\n' "$db_name"
+#       printf 'AWS_STORAGE_BUCKET_NAME=%s\n' "$bucket_name"
+#       ;;
+#   esac
+# }
+
 # Drop the per-worktree logical DB / bucket. Run by `clean`.
 # wt_project_shared_db_drop() {
 #   local db_name="$1"
