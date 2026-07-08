@@ -543,6 +543,15 @@ cd "$ORIG_PWD2"
 assert_eq "compose.override.lane.yaml exists before infra up (bug 3), then infra up -> ensure hooks -> lane up -> lane down" \
   "OVERRIDE_PRESENT_AT_INFRA_UP;INFRA_UP;ENSURE_DB;ENSURE_BUCKET;LANE_UP;LANE_DOWN;" "$CLAIM_ORDER"
 
+# Bug 4 regression guard: claim's own generated files (.env.worktree-lane,
+# compose.override.lane.yaml) must be excluded from git in the PRINCIPAL repo
+# the same way the isolated-mode files (.env.worktree, compose.override.yaml)
+# already are -- otherwise they show up as untracked noise / merge artifacts
+# in the principal repo's working tree.
+CLAIM_EXCLUDE="${CLAIM_PRINCIPAL}/.git/info/exclude"
+assert_contains "claim excludes .env.worktree-lane from git" ".env.worktree-lane" "$(cat "$CLAIM_EXCLUDE")"
+assert_contains "claim excludes compose.override.lane.yaml from git" "compose.override.lane.yaml" "$(cat "$CLAIM_EXCLUDE")"
+
 unset WT_SHARED_INFRA_SERVICES WT_SHARED_LANE_SERVICES
 # Restore the real wt_discover/wt_queue_*/wt_compose_lane/hooks stubbed above.
 source "${SCRIPT_DIR}/worktree-env.sh"

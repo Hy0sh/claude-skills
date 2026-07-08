@@ -365,6 +365,20 @@ wt_write_lane_env_file() {
 }
 
 # ---------------------------------------------------------------------------
+# Shared lane mode -- ensure the two files claim generates in the PRINCIPAL
+# repo (.env.worktree-lane, compose.override.lane.yaml) are excluded from git
+# the same way the isolated-mode files already are, so they never show up as
+# untracked noise in the principal repo's working tree. Idempotent.
+# ---------------------------------------------------------------------------
+wt_ensure_shared_lane_gitignore() {
+  local dir="$1" exclude line
+  exclude="${dir}/.git/info/exclude"
+  for line in '.env.worktree-lane' 'compose.override.lane.yaml'; do
+    grep -qxF "$line" "$exclude" 2>/dev/null || printf '%s\n' "$line" >> "$exclude"
+  done
+}
+
+# ---------------------------------------------------------------------------
 # Shared lane mode -- docker compose invocation scoped to the fixed lane
 # project (rooted at the PRINCIPAL repo, not the calling worktree).
 # ---------------------------------------------------------------------------
@@ -761,6 +775,7 @@ cmd_claim() {
     return 1
   fi
 
+  wt_ensure_shared_lane_gitignore "$WT_PRINCIPAL_ROOT"
   wt_discover "$WT_PRINCIPAL_ROOT" || return 1
 
   local slug idle_timeout
