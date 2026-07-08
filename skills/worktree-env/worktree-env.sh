@@ -776,6 +776,15 @@ cmd_claim() {
 
   wt_write_lane_env_file "$WT_PRINCIPAL_ROOT" "${WT_PROJECT_PREFIX}-lane"
 
+  # compose.override.lane.yaml must exist before ANY wt_compose_lane call,
+  # including the infra one below — wt_compose_lane always passes it via -f.
+  # On a repo's first-ever claim it doesn't exist yet, so render it here
+  # (db_name/bucket_name are pure string computations, no infra dependency).
+  local db_name bucket_name
+  db_name=$(wt_shared_resource_name db "$slug")
+  bucket_name=$(wt_shared_resource_name bucket "$slug")
+  wt_render_shared_override "$WT_TOPLEVEL" "$db_name" "$bucket_name" "${WT_SHARED_LANE_SERVICES[@]}" > "${WT_PRINCIPAL_ROOT}/compose.override.lane.yaml"
+
   # Infra first, and confirmed running, BEFORE the _ensure hooks below: on the
   # very first claim on a machine, db/rustfs don't exist yet, so exec-ing into
   # them (as the hooks do) would fail if we ran the hooks first.
@@ -788,17 +797,12 @@ cmd_claim() {
     wt_wait_shared_infra_ready "${WT_SHARED_INFRA_SERVICES[@]}"
   fi
 
-  local db_name bucket_name
-  db_name=$(wt_shared_resource_name db "$slug")
-  bucket_name=$(wt_shared_resource_name bucket "$slug")
   if declare -F wt_project_shared_db_ensure >/dev/null; then
     wt_project_shared_db_ensure "$db_name" || printf 'WARNING: db ensure hook failed — see messages above.\n' >&2
   fi
   if declare -F wt_project_shared_bucket_ensure >/dev/null; then
     wt_project_shared_bucket_ensure "$bucket_name" || printf 'WARNING: bucket ensure hook failed — see messages above.\n' >&2
   fi
-
-  wt_render_shared_override "$WT_TOPLEVEL" "$db_name" "$bucket_name" "${WT_SHARED_LANE_SERVICES[@]}" > "${WT_PRINCIPAL_ROOT}/compose.override.lane.yaml"
 
   if ! wt_compose_lane up -d "${WT_SHARED_LANE_SERVICES[@]}"; then
     printf 'ERROR: docker compose up failed — releasing the lane immediately.\n' >&2

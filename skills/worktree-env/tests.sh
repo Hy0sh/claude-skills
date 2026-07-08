@@ -508,6 +508,16 @@ wt_compose_lane() {
     if [[ " $* " == *" backend "* ]]; then
       CLAIM_ORDER+="LANE_UP;"
     else
+      # Bug 3 regression guard: wt_compose_lane always passes
+      # `-f compose.override.lane.yaml` to docker compose (see wt_compose_lane
+      # definition) -- on a repo's first-ever claim this file must already
+      # exist by the time the INFRA services are started, not just by the
+      # time the LANE services are started (which is too late).
+      if [[ -f "${WT_PRINCIPAL_ROOT}/compose.override.lane.yaml" ]]; then
+        CLAIM_ORDER+="OVERRIDE_PRESENT_AT_INFRA_UP;"
+      else
+        CLAIM_ORDER+="OVERRIDE_MISSING_AT_INFRA_UP;"
+      fi
       CLAIM_ORDER+="INFRA_UP;"
     fi
   elif [[ "$1" == "ps" ]]; then
@@ -530,8 +540,8 @@ cmd_claim --mode test -- true
 
 cd "$ORIG_PWD2"
 
-assert_eq "infra up -> ensure hooks -> lane up -> lane down" \
-  "INFRA_UP;ENSURE_DB;ENSURE_BUCKET;LANE_UP;LANE_DOWN;" "$CLAIM_ORDER"
+assert_eq "compose.override.lane.yaml exists before infra up (bug 3), then infra up -> ensure hooks -> lane up -> lane down" \
+  "OVERRIDE_PRESENT_AT_INFRA_UP;INFRA_UP;ENSURE_DB;ENSURE_BUCKET;LANE_UP;LANE_DOWN;" "$CLAIM_ORDER"
 
 unset WT_SHARED_INFRA_SERVICES WT_SHARED_LANE_SERVICES
 # Restore the real wt_discover/wt_queue_*/wt_compose_lane/hooks stubbed above.
