@@ -57,6 +57,21 @@ Run these from the current repo. The `.git` is shared across worktrees, so `--al
 
 5. **Jira labels** for any `GAL-\d+` keys found in commit messages or branch names. Extract the keys, dedupe, then fetch each via the Atlassian MCP tool `getJiraIssue` (load it through ToolSearch: `select:mcp__claude_ai_Atlassian__getJiraIssue`). Use the issue summary to phrase "Début GAL-XXX <libellé>" items. If the MCP tool is unavailable, skip Jira enrichment and keep the raw key.
 
+6. **PRs you reviewed today** (a count, not a list). Get your GitHub login, then count the distinct PRs on which you submitted at least one review today:
+   ```bash
+   me=$(gh api user --jq .login)
+   repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+   day=$(date +%F)   # or the target date when $ARGUMENTS is set
+   count=0
+   for n in $(gh search prs --repo "$repo" --reviewed-by="$me" --updated=">=$day" --json number --jq '.[].number'); do
+     n_today=$(gh api "repos/$repo/pulls/$n/reviews" \
+       --jq "[.[] | select(.user.login==\"$me\") | select((.submitted_at // \"\") | startswith(\"$day\"))] | length")
+     [ "${n_today:-0}" -gt 0 ] && count=$((count+1))
+   done
+   echo "PRs reviewed today: $count"
+   ```
+   Two gotchas: handle a null `submitted_at` (pending reviews) with `// ""` exactly as above — otherwise `startswith` errors, jq exits non-zero, and the count silently reads 0. And `submitted_at` is UTC: a review submitted late evening Paris time lands on the next UTC day — close enough for a daily count, but note it if a review seems missing.
+
 ## Synthesize the bullets
 
 - **One bullet per chantier** (PR or branch/ticket), not per commit. Fold multiple commits on the same branch into a single bullet.
@@ -66,10 +81,11 @@ Run these from the current repo. The `.git` is shared across worktrees, so `--al
   - PR open, or branch with today's commits but no merged PR → append `, en cours`.
   - Brand-new branch with only today's first commits and no PR → prefix `Début ` and append `, en cours`.
 - **Exclude** purely administrative noise with no client value (e.g. a token/secret rotation bump) unless it was the day's actual work. When unsure, keep it.
-- Keep it French, technical, synthetic. No PR numbers, no hashes, no counts.
+- Keep it French, technical, synthetic. No PR numbers, no hashes. The **only** count allowed is the reviews line (see Output).
+- **Reviews line:** when the review count from step 6 is ≥ 1, append a final bullet `* N PR reviewées` (`* 1 PR reviewée` for a single one). Omit the bullet entirely when the count is 0.
 
 ## Output
 
-Print **the bullets only** (no `@François B.` header line — the user's name line is already in the Canvas template), inside a fenced code block so it is clean to copy-paste. Then add one line outside the block reminding the user to review the guessed `, en cours` / `en relecture` states before pasting into the Slack Canvas.
+Print **the bullets only** (no `@François B.` header line — the user's name line is already in the Canvas template), inside a fenced code block so it is clean to copy-paste. The chantier bullets come first, then the `* N PR reviewées` bullet last (when ≥ 1). Then add one line outside the block reminding the user to review the guessed `, en cours` / `en relecture` states before pasting into the Slack Canvas.
 
 If `gh` or Jira is unavailable, say so briefly and produce the best draft from the sources that did respond — never fail outright.
