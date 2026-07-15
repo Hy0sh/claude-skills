@@ -1,4 +1,10 @@
-# Traefik partagé — routage par nom d'hôte, auto-découverte via labels Docker.
+# Traefik partagé — routage par nom d'hôte via un provider fichier (config
+# dynamique générée par worktree-env.sh dans WT_TRAEFIK_DYNAMIC_DIR). Pas de
+# dépendance au socket Docker : sur certaines installations Docker Desktop
+# (notamment Apple Silicon), le client Docker embarqué dans l'image Traefik
+# échoue à négocier avec l'API du daemon ("Error response from daemon: " vide)
+# alors que le socket lui-même est parfaitement fonctionnel — reproduit hors
+# contexte worktree-env, cf. project_worktree_env_v2_setup_gallia (mémoire).
 networks:
   wtenv:
     external: true
@@ -7,14 +13,13 @@ services:
   traefik:
     image: traefik:v3.3
     command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=${WT_NETWORK}
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
       - --entrypoints.web.address=:80
     ports:
       - "80:80"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${WT_TRAEFIK_DYNAMIC_DIR}:/etc/traefik/dynamic:ro
     networks:
       - wtenv
     restart: unless-stopped

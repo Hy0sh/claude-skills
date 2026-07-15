@@ -67,26 +67,56 @@ wt_render_override() {
   echo "services:"
   for svc in "${WT_PREVIEW_SERVICES[@]}"; do
     echo "  ${svc}:"
+    # Access goes exclusively through Traefik host-based routing (port 80).
+    # A fixed host port in the base compose file (e.g. "8000:8000") would
+    # collide with another live preview or a plain `docker compose up` main
+    # stack publishing the same port.
+    echo "    ports: !override []"
     echo "    networks:"
     echo "      wtenv:"
-    echo "        aliases: [${svc}]"
-    if [ "$svc" = "$WT_FRONT_SERVICE" ]; then
-      echo "    labels:"
-      echo "      - traefik.enable=true"
-      echo "      - \"traefik.http.routers.${slug}-front.rule=HostRegexp(\`^[a-z0-9-]+\\\\.${slug}\\\\.localhost\$\`)\""
-      echo "      - traefik.http.routers.${slug}-front.priority=1"
-      echo "      - traefik.http.services.${slug}-front.loadbalancer.server.port=${WT_FRONT_PORT:-3000}"
-    fi
-    if [ "$svc" = "$WT_API_SERVICE" ]; then
-      echo "    labels:"
-      echo "      - traefik.enable=true"
-      echo "      - \"traefik.http.routers.${slug}-api.rule=Host(\`api.${slug}.localhost\`)\""
-      echo "      - traefik.http.routers.${slug}-api.priority=100"
-      echo "      - traefik.http.services.${slug}-api.loadbalancer.server.port=${WT_API_PORT:-8000}"
-    fi
+    # Alias suffixed by slug: the wtenv network is shared by every worktree's
+    # preview project, so a bare "${svc}" alias would collide across two
+    # concurrently live previews (up to 2 are allowed). Traefik's dynamic
+    # config (wt_render_traefik_dynamic) targets this same per-slug hostname.
+    echo "        aliases: [${svc}-${slug}]"
     wt_project_service_extra "$svc" "$slug"
   done
+  if declare -f wt_project_volumes >/dev/null; then
+    echo "volumes:"
+    wt_project_volumes
+  fi
 }
+
+# Imprime la config dynamique Traefik (provider fichier) pour le worktree
+# courant : routeurs HTTP + services pointant sur les alias réseau uniques
+# posés par wt_render_override ci-dessus. Pas de dépendance au socket Docker.
+wt_render_traefik_dynamic() {
+  local slug="$1"
+  echo "http:"
+  echo "  routers:"
+  echo "    ${slug}-front:"
+  # Single-quoted YAML scalar: a double-quoted one would choke on the
+  # backslash-dot regex escapes ("found unknown escape character").
+  echo "      rule: 'HostRegexp(\`^[a-z0-9-]+\\.${slug}\\.localhost\$\`)'"
+  echo "      service: ${slug}-front"
+  echo "      priority: 1"
+  echo "    ${slug}-api:"
+  echo "      rule: \"Host(\`api.${slug}.localhost\`)\""
+  echo "      service: ${slug}-api"
+  echo "      priority: 100"
+  echo "  services:"
+  echo "    ${slug}-front:"
+  echo "      loadBalancer:"
+  echo "        servers:"
+  echo "          - url: \"http://${WT_FRONT_SERVICE}-${slug}:${WT_FRONT_PORT:-3000}\""
+  echo "    ${slug}-api:"
+  echo "      loadBalancer:"
+  echo "        servers:"
+  echo "          - url: \"http://${WT_API_SERVICE}-${slug}:${WT_API_PORT:-8000}\""
+}
+
+wt_traefik_dynamic_dir() { echo "$WT_PRINCIPAL_ROOT/.claude/.wtenv-traefik-dynamic"; }
+wt_traefik_dynamic_path() { echo "$(wt_traefik_dynamic_dir)/${1}.yaml"; }
 
 # Imprime le compose.override.yaml pour les services d'infra (mutualisés).
 wt_render_infra_override() {
@@ -100,6 +130,11 @@ wt_render_infra_override() {
   for svc in "${WT_INFRA_SERVICES[@]}"; do
     echo "  ${svc}:"
     echo "    ports: !override []"
+    # A fixed container_name in the base compose file collides with any
+    # already-running instance under a different compose project (e.g. a
+    # plain `docker compose up` main stack) — reset it so Docker assigns the
+    # standard <project>-<service>-<n> name instead. No-op if unset.
+    echo "    container_name: !reset null"
     echo "    networks:"
     echo "      wtenv:"
     echo "        aliases: [${svc}]"
@@ -110,19 +145,21 @@ wt_infra_override_path() { echo "$WT_PRINCIPAL_ROOT/.claude/.wtenv-infra.overrid
 
 cmd_infra() {
   wt_resolve_context
-  local action="${1:-up}" proj="wtenv-infra-${WT_REPO}" ovr; ovr="$(wt_infra_override_path)"
+  local action="${1:-up}" proj="wtenv-infra-${WT_REPO}" ovr dyn_dir
+  ovr="$(wt_infra_override_path)"; dyn_dir="$(wt_traefik_dynamic_dir)"
   case "$action" in
     up)
+      mkdir -p "$dyn_dir"
       docker network inspect "$WT_NETWORK" >/dev/null 2>&1 || docker network create "$WT_NETWORK" >/dev/null
       wt_render_infra_override "$WT_REPO" > "$ovr"
-      WT_NETWORK="$WT_NETWORK" docker compose -p "$proj" \
+      WT_NETWORK="$WT_NETWORK" WT_TRAEFIK_DYNAMIC_DIR="$dyn_dir" docker compose -p "$proj" \
         --project-directory "$WT_PRINCIPAL_ROOT" \
         -f "$WT_BASE_COMPOSE" -f "$ovr" -f "$WT_SCRIPT_DIR/compose.traefik.yaml" \
         up -d "${WT_INFRA_SERVICES[@]}" traefik
       echo "✅ Infra + Traefik démarrés (projet $proj, réseau $WT_NETWORK)."
       ;;
     down)
-      WT_NETWORK="$WT_NETWORK" docker compose -p "$proj" \
+      WT_NETWORK="$WT_NETWORK" WT_TRAEFIK_DYNAMIC_DIR="$dyn_dir" docker compose -p "$proj" \
         --project-directory "$WT_PRINCIPAL_ROOT" \
         -f "$WT_BASE_COMPOSE" -f "$ovr" -f "$WT_SCRIPT_DIR/compose.traefik.yaml" \
         down
@@ -175,7 +212,9 @@ cmd_test() {
   wt_provision_env_files
   [ "${1:-}" = "--" ] && shift
   [ $# -gt 0 ] || wt_die "Usage : worktree-env test -- <commande de test>"
-  wt_compose run --rm "$WT_TEST_SERVICE" "$@"
+  # --no-deps: same reasoning as cmd_preview's up — infra deps already run
+  # under the shared infra project.
+  wt_compose run --rm --no-deps "$WT_TEST_SERVICE" "$@"
 }
 
 cmd_preview() {
@@ -192,7 +231,14 @@ cmd_preview() {
         wt_die "Arrête-en une : worktree-env preview stop (dans son worktree)."
       fi
       declare -f wt_project_db_ensure >/dev/null && wt_project_db_ensure "$WT_SLUG"
-      wt_compose up -d "${WT_PREVIEW_SERVICES[@]}"
+      # --no-deps: infra services (db, mailhog...) a preview service depends_on
+      # already run under the shared infra project (`infra up`) and are reached
+      # via the wtenv network alias. Without --no-deps, Compose would also try
+      # to (re)create them here under the worktree project — colliding on any
+      # fixed container_name they carry in the base compose file.
+      wt_compose up -d --no-deps "${WT_PREVIEW_SERVICES[@]}"
+      mkdir -p "$(wt_traefik_dynamic_dir)"
+      wt_render_traefik_dynamic "$WT_SLUG" > "$(wt_traefik_dynamic_path "$WT_SLUG")"
       declare -f wt_project_seed >/dev/null && wt_project_seed "$WT_SLUG"
       echo "=== Accès ==="
       if declare -f wt_project_print_access >/dev/null; then
@@ -204,6 +250,7 @@ cmd_preview() {
       ;;
     stop)
       wt_compose down
+      rm -f "$(wt_traefik_dynamic_path "$WT_SLUG")"
       echo "✅ Preview arrêtée pour $WT_SLUG."
       ;;
     *) wt_die "preview : action inconnue '$action' (up|stop)." ;;
@@ -223,7 +270,7 @@ cmd_clean() {
   wt_resolve_context
   wt_compose down -v 2>/dev/null || true
   declare -f wt_project_db_drop >/dev/null && wt_project_db_drop "$WT_SLUG"
-  rm -f "$(wt_override_path)"
+  rm -f "$(wt_override_path)" "$(wt_traefik_dynamic_path "$WT_SLUG")"
   echo "✅ Empreinte de $WT_SLUG nettoyée."
 }
 
