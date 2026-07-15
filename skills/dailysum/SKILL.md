@@ -30,18 +30,21 @@ A PR merged today whose real work predates today must **not** appear. A chantier
 
 Run these from the current repo. The `.git` is shared across worktrees, so `--all` captures every worktree's branches.
 
-1. **Author identity:**
+1. **Author identity — both of them.** A GitHub squash-merge rewrites the resulting commit's author on the base branch to the GitHub account's noreply email, even though the original commits on the feature branch carry your local git email. Missing either identity silently drops same-day PRs that got squash-merged. Resolve both:
    ```bash
    git config user.email; git config user.name
+   gh api user --jq '(.id|tostring) + "+" + .login + "@users.noreply.github.com"'
    ```
 
-2. **Commits authored today, across all branches/worktrees** (subject + body, with ref decoration):
+2. **Commits authored today, across all branches/worktrees, under either identity** (subject + body, with ref decoration):
    ```bash
-   git log --all --author="$(git config user.email)" \
+   git log --all --author="$(git config user.email)" --author="$GH_NOREPLY_EMAIL" \
      --since="$(date +%F) 00:00:00" --until="$(date +%F) 23:59:59" \
      --pretty=format:'%h%x09%D%x09%s%n%b' --date=local
    ```
-   (Replace `$(date +%F)` with the target date when `$ARGUMENTS` is set.)
+   (`$GH_NOREPLY_EMAIL` = the email resolved in step 1; multiple `--author` flags OR together. Replace `$(date +%F)` with the target date when `$ARGUMENTS` is set.)
+
+   The `--all` walk also surfaces `refs/stash` entries (commit subjects starting with `index on <branch>: ...` or `WIP on <branch>: ...`) — these are stash artifacts, not real work; drop them before synthesizing bullets.
 
 3. **Active worktree branches** (to catch WIP chantiers that have no PR — e.g. a freshly started ticket):
    ```bash
