@@ -1,0 +1,20 @@
+# Traefik partagé — routage par nom d'hôte, auto-découverte via labels Docker.
+networks:
+  wtenv:
+    external: true
+    name: ${WT_NETWORK}
+services:
+  traefik:
+    image: traefik:v3.3
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${WT_NETWORK}
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - wtenv
+    restart: unless-stopped

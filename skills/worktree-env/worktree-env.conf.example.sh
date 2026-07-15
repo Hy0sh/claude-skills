@@ -1,119 +1,162 @@
 #!/usr/bin/env bash
-# worktree-env.conf.sh — OPTIONAL per-project config for the worktree-env skill.
+# wtenv.conf.sh — Template de configuration minimal pour la compétence worktree-env.
 #
-# Place a copy at <repo>/.claude/worktree-env.conf.sh and gitignore it:
-#   echo '/.claude/worktree-env.conf.sh' >> .git/info/exclude
+# Copiez ce fichier dans <repo>/.claude/wtenv.conf.sh et personnalisez-le :
+#   cp skills/worktree-env/worktree-env.conf.example.sh .claude/wtenv.conf.sh
+#   # Modifiez .claude/wtenv.conf.sh avec vos valeurs spécifiques au projet
+#   echo '/.claude/wtenv.conf.sh' >> .git/info/exclude
 #
-# It is sourced host-side by worktree-env.sh (never copied into the worktree).
-# Everything below is OPTIONAL: with no config at all the engine auto-discovers
-# every service/port from the base compose file, remaps them into a free port
-# block, starts them all, and prints a raw URL list.
+# Il est sourcé côté hôte par worktree-env.sh et fournit des variables + hooks
+# pour le moteur d'isolation.
 
-# --- Variables --------------------------------------------------------------
-# WT_PROJECT_PREFIX="myrepo-wt"        # default: <principal-repo-basename>-wt
-# WT_BLOCK_SIZE=20                     # default 20; auto-bumped if more ports
-# WT_BASE_START=20000                  # first host port of block k=0
-# WT_DEFAULT_SERVICES=(db backend)     # 'up' with no args; default: all discovered
-WT_ENV_FILES=(backend/.env)            # provisioned from principal into the worktree
+# --- Variables essentielles ---------------------------------------------------------
 
-# --- Hooks (all optional) ---------------------------------------------------
-# Extra YAML emitted under a service in compose.override.yaml. Use
-# `wt_host_port_for <svc> <container_port>` to read the host port the engine
-# assigned (indices follow the alphabetical discovery order, NOT a fixed +1/+2).
-wt_project_service_extra() {
-  local svc="$1" block_base="$2"
-  case "$svc" in
-    frontend)
-      printf '    environment:\n'
-      printf '      VITE_API_URL: "http://localhost:%s/api"\n' "$(wt_host_port_for backend 8000)"
-      ;;
-  esac
+# Services lancés dans l'infrastructure partagée (BD, caches, mailcatcher, etc).
+# Ils sont lancés une fois par machine par le moteur d'installation et partagés
+# entre tous les répertoires de travail.
+# Exemple : (db postgres cache redis mailhog)
+WT_INFRA_SERVICES=(db cache)
+
+# Services lancés en mode aperçu (liés via une voie partagée ou isolés par
+# répertoire de travail, selon votre mode). Utilisés lors de `wt_resolve_context`.
+# Exemple : (backend frontend worker)
+WT_PREVIEW_SERVICES=(backend frontend)
+
+# Nom du service pour les exécutions de tests (isolé par répertoire de travail).
+# Exemple : backend
+WT_TEST_SERVICE=backend
+
+# Nom du service pour le front-end (utilisé pour le mappage des ports et compose.override).
+# Exemple : frontend
+WT_FRONT_SERVICE=frontend
+
+# Nom du service pour l'API/backend (utilisé pour le mappage des ports et compose.override).
+# Exemple : backend
+WT_API_SERVICE=backend
+
+# Port hôte pour le conteneur front-end (la détection du port conteneur est automatique).
+# Exemple : 3000
+WT_FRONT_PORT=3000
+
+# Port hôte pour le conteneur API.
+# Exemple : 8000
+WT_API_PORT=8000
+
+# Fichiers de configuration ou env à provisionner à partir du répertoire principal dans
+# le répertoire de travail avant le lancement de `up`. Relatif à la racine du répertoire principal.
+# Exemple : (backend/.env frontend/.env.development)
+WT_ENV_FILES=(backend/.env)
+
+# --- Hooks (tous optionnels) ---------------------------------------------------
+
+# Génère le nom logique de la base de données pour un slug de répertoire de travail donné.
+# $1: slug du répertoire de travail (ex : « feature-auth », généré automatiquement à partir de la branche)
+# Doit renvoyer un nom approprié comme nom de base de données PostgreSQL.
+#
+# Exemple :
+# wt_project_db_name() { echo "myproject_wt_${1//-/_}"; }
+wt_project_db_name() {
+  echo "myproject_wt_${1//-/_}"
 }
 
-# Lines emitted under the top-level `volumes:` key (shared caches, etc.).
-# wt_project_volumes() {
-#   printf '  my_cache:\n    name: my_cache\n'   # fixed name → shared across worktrees
+# Assure que la base de données par répertoire de travail existe (idempotente).
+# Appelée par le moteur lors de l'installation.
+# $1: slug du répertoire de travail
+# Doit quitter proprement si la BD existe déjà.
+#
+# Exemple :
+# wt_project_db_ensure() {
+#   local db; db="$(wt_project_db_name "$1")"
+#   docker compose ... exec -T db sh -c \
+#     "psql -U postgres -tc \"SELECT 1 FROM pg_database WHERE datname='${db}'\" \
+#      | grep -q 1 || createdb -U postgres '${db}'"
 # }
+wt_project_db_ensure() {
+  local db; db="$(wt_project_db_name "$1")"
+  # TODO : Implémentez la logique de création de BD pour votre infrastructure
+  # Exemple : wt_compose exec -T db createdb -U postgres "$db" 2>/dev/null || true
+  return 0
+}
 
-# Runs after `up -d`. Use it to seed a fresh DB / provision accounts. The engine
-# helpers wt_compose and $WT_TOPLEVEL are available here.
-# wt_project_post_up() {
-#   local block_base="$1"
-#   wt_compose exec -T backend ./seed.sh
+# Supprime la base de données par répertoire de travail. Appelée par `clean`.
+# $1: slug du répertoire de travail
+# Doit quitter proprement si la BD n'existe pas.
+#
+# Exemple :
+# wt_project_db_drop() {
+#   local db; db="$(wt_project_db_name "$1")"
+#   docker compose ... exec -T db dropdb -U postgres --if-exists "$db"
 # }
+wt_project_db_drop() {
+  local db; db="$(wt_project_db_name "$1")"
+  # TODO : Implémentez la logique de suppression de BD pour votre infrastructure
+  # Exemple : wt_compose exec -T db dropdb -U postgres --if-exists "$db"
+  return 0
+}
 
-# Pretty access output for `up` (URLs + test accounts). Falls back to a raw
-# port listing when undefined.
-# wt_project_print_access() {
-#   local block_base="$1"
-#   printf 'Frontend: http://localhost:%s\n' "$(wt_host_port_for frontend 3000)"
+# Remplit ou provisionne la base de données après la fin de `up`.
+# $1: slug du répertoire de travail (disponible si nécessaire)
+# Les assistants du moteur wt_compose et $WT_TOPLEVEL sont disponibles ici.
+#
+# Exemple :
+# wt_project_seed() {
+#   wt_compose exec -T backend python manage.py seed_data || true
 # }
+wt_project_seed() {
+  local slug="$1"
+  # TODO : Implémentez la logique de remplissage (migrations BD, fixtures, données de test, etc.)
+  # Exemple : wt_compose exec -T backend ./scripts/seed.sh
+  return 0
+}
 
-# --- Shared lane mode (optional, additive) ----------------------------------
-# Alternative to the isolated-per-worktree mode above: ONE lane of containers
-# shared across all worktrees of this repo, arbitrated by queue_daemon.py
-# (`worktree-env.sh claim` / `release` / `queue up|down`). Use on heavy
-# stacks where running several isolated worktree stacks in parallel already
-# saturates the machine. Setting WT_SHARED_LANE_SERVICES is what opts a
-# project into this mode; everything else here is optional.
-
-# Services started once per machine via `claim`, never swapped between
-# worktrees (DB, object storage, mailcatcher, ...).
-# WT_SHARED_INFRA_SERVICES=(db rustfs mailhog pgadmin)
-
-# Services bind-mounted onto the current lane holder by `claim` (no port
-# remap: shared lane mode always uses the base compose file's fixed ports).
-# WT_SHARED_LANE_SERVICES=(backend celery_worker celery_beat frontend)
-
-# Seconds without a heartbeat before an interactive `claim` is auto-released
-# and the lane handed to the next worktree in the FIFO queue. Default 2700 (45min).
-# WT_SHARED_IDLE_TIMEOUT=2700
-
-# Naming convention for the per-worktree logical DB and bucket that `claim`
-# ensures exist (and `clean` drops). Default: "${WT_PROJECT_PREFIX}_<slug>"
-# for both kinds. Override only if a project needs a different convention.
-# wt_project_shared_resource_name() {
-#   local kind="$1" slug="$2"   # kind: "db" or "bucket"
-#   printf '%s_%s' "$WT_PROJECT_PREFIX" "$slug"
-# }
-
-# Ensure the per-worktree logical DB / bucket exist (idempotent). Run by
-# `claim` before bringing the lane up. Without these hooks, `claim` skips
-# provisioning and the project is responsible for it another way.
-# wt_project_shared_db_ensure() {
-#   local db_name="$1"
-#   wt_compose_lane exec -T db createdb -U postgres "$db_name" 2>/dev/null || true
-# }
-# wt_project_shared_bucket_ensure() {
-#   local bucket_name="$1"
-#   wt_compose_lane exec -T rustfs mc mb "local/${bucket_name}" 2>/dev/null || true
-# }
-
-# Env vars to inject into a lane service so isolation is actually applied at
-# runtime -- the per-worktree DB/bucket that `claim` ensures exist above are
-# just names unless the containers are told to use them. The engine doesn't
-# know DB_NAME/AWS_STORAGE_BUCKET_NAME by nature (project-specific), so this
-# hook is the extension point: print "KEY=VALUE" lines (one per line) for a
-# given service; merged into compose.override.lane.yaml's `environment:` for
-# that service, alongside its `volumes: !override` block. Without this hook,
-# no environment vars are injected (containers keep the base compose's fixed
-# values -- fine for a project with nothing to isolate this way).
-# wt_project_shared_lane_env() {
-#   local svc="$1" db_name="$2" bucket_name="$3"
-#   case "$svc" in
-#     backend|celery_worker|celery_beat)
-#       printf 'DB_NAME=%s\n' "$db_name"
-#       printf 'AWS_STORAGE_BUCKET_NAME=%s\n' "$bucket_name"
+# Configuration supplémentaire YAML d'environnement ou de volume pour un service spécifique.
+# Fusionnée dans le compose.override.yaml pour ce service.
+# $1: nom du service (ex : « frontend », « backend »)
+# $2: slug du répertoire de travail
+#
+# Exemple :
+# wt_project_service_extra() {
+#   case "$1" in
+#     frontend)
+#       echo "    environment:"
+#       echo "      VITE_API_URL: \"http://api.$2.localhost/api\""
+#       ;;
+#     backend)
+#       echo "    environment:"
+#       echo "      DB_NAME: \"$(wt_project_db_name "$2")\""
+#       echo "    volumes: !override"
+#       echo "      - ./backend:/app"
 #       ;;
 #   esac
 # }
+wt_project_service_extra() {
+  local svc="$1" slug="$2"
+  case "$svc" in
+    # Ajoutez des variables d'environnement ou des volumes spécifiques au service ici
+    # Exemple :
+    # frontend)
+    #   printf '    environment:\n'
+    #   printf '      VITE_API_URL: "http://api.%s.localhost/api"\n' "$slug"
+    #   ;;
+  esac
+}
 
-# Drop the per-worktree logical DB / bucket. Run by `clean`.
-# wt_project_shared_db_drop() {
-#   local db_name="$1"
-#   wt_compose_lane exec -T db dropdb -U postgres --if-exists "$db_name"
+# Affichage élégant des instructions d'accès (URLs, comptes de test, etc).
+# Appelée par `up` pour afficher comment accéder aux services en cours d'exécution.
+# $1: slug du répertoire de travail
+#
+# Exemple :
+# wt_project_print_access() {
+#   echo "Frontend: http://myorg.$1.localhost"
+#   echo "API: http://api.$1.localhost/api"
+#   echo "Django admin: http://api.$1.localhost/admin"
+#   echo "Test accounts (pwd: <mot-de-passe-de-test>): <compte-de-test>"
 # }
-# wt_project_shared_bucket_drop() {
-#   local bucket_name="$1"
-#   wt_compose_lane exec -T rustfs mc rb --force "local/${bucket_name}"
-# }
+wt_project_print_access() {
+  local slug="$1"
+  # TODO : Personnalisez les instructions d'accès pour votre projet
+  # Exemple :
+  # echo "Frontend: http://<org>.$slug.localhost"
+  # echo "API: http://api.$slug.localhost/api"
+  return 0
+}
