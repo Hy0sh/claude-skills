@@ -7,7 +7,7 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | Skill | Description |
 |---|---|
 | `review-pr` | Review structurée et actionnable d'une pull request GitHub |
-| `worktree-env` | Stack Docker Compose isolée par worktree git (conteneurs, volumes et ports séparés) |
+| `wtm` | Usage de [worktree-manager](https://github.com/Hy0sh/worktree-manager) : worktree git avec sa stack Docker isolée, plus les disciplines d'isolation et de preuve runtime |
 | `dailysum` | Portion personnelle du daily sum collaboratif (commits du jour, enrichissement PR/Jira) à coller dans Slack |
 
 ## Installation
@@ -24,7 +24,8 @@ Copie les dossiers voulus dans `~/.claude/skills/` :
 
 ```bash
 cp -R skills/review-pr ~/.claude/skills/
-cp -R skills/worktree-env ~/.claude/skills/
+cp -R skills/wtm ~/.claude/skills/
+cp -R skills/dailysum ~/.claude/skills/
 ```
 
 ## Structure
@@ -37,9 +38,8 @@ claude-skills/
 └── skills/
     ├── review-pr/
     │   └── SKILL.md
-    └── worktree-env/
-        ├── SKILL.md
-        ├── worktree-env.sh
-        ├── worktree-env.conf.example.sh
-        └── tests.sh
+    ├── wtm/
+    │   └── SKILL.md
+    └── dailysum/
+        └── SKILL.md
 ```
