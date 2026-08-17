@@ -73,6 +73,7 @@ feat/x` from anywhere.
 wtm create feat/my-branch                # worktree + stack, base = the project's own
 wtm create my-app feat/my-branch main    # explicit project and base branch
 wtm create feat/my-branch --no-start     # prepare the worktree, leave the stack down
+wtm create feat/pushed-by-someone-else   # same command to pick up a remote branch
 
 wtm list                                 # INDEX / BRANCH / STATUS / PATH
 wtm start feat/my-branch                 # bring a stopped stack back up
@@ -81,9 +82,14 @@ wtm remove feat/my-branch                # stop + remove the worktree, local bra
 wtm remove feat/my-branch --force        # despite modified tracked files
 ```
 
-An existing local branch is reused, and the base argument is then ignored. Allocated
-ports are printed on `create`/`start`; `wtm list` also reports whether each stack is
-up, and prints `-` instead of hanging when Docker is slow or down.
+An existing branch is reused, and the base argument is then ignored. A local branch
+is checked out as-is; a branch that only exists on a remote is checked out tracking
+it, `create` fetching first in case it was pushed since the last fetch. So do not
+`git fetch` and `git branch` by hand before creating a worktree on someone else's
+branch: `wtm create <branch>` is the whole thing, and it errors out instead of
+guessing when two remotes carry that name. Allocated ports are printed on
+`create`/`start`; `wtm list` also reports whether each stack is up, and prints `-`
+instead of hanging when Docker is slow or down.
 
 Creation only happens behind the `create` verb. Any unknown word is rejected rather
 than silently turned into a branch.
