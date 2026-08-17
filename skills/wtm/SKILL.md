@@ -8,7 +8,7 @@ description: >
   restored in seconds, so parallel agents never collide with the main stack or with
   each other. Covers the worktree lifecycle, reaching into the stack, and the
   isolation/runtime-proof disciplines. Invoked as `/wtm setup`, it instead guides
-  registering a project in the `wtm` registry.
+  registering a project in the `wtm` registry, or changing one already there.
 argument-hint: [setup]
 ---
 
@@ -19,9 +19,9 @@ Keep commands, paths and technical identifiers unchanged.
 
 `wtm`, its shell completion, Go, Docker: **never install or upgrade any of them
 yourself**. If something is missing, print the exact command and ask the user to run
-it, then wait. Same rule for `wtm project create` and `wtm project remove`: they
-write to the user's global registry, so show the full command and get an explicit
-"go ahead" first.
+it, then wait. Same rule for `wtm project create`, `wtm project edit` and `wtm project
+remove`: they write to the user's global registry, so show the full command and get an
+explicit "go ahead" first.
 
 Read-only commands (`wtm --version`, `wtm doctor`, `wtm list`, `wtm backup list`,
 `wtm project list`) need no approval.
@@ -57,6 +57,10 @@ GOBIN=$HOME/.local/bin go install github.com/Hy0sh/worktree-manager/cmd/wtm@late
 ```
 
 (needs Go >= 1.24; `git` >= 2.31 and Docker Compose v2.24+ are required at runtime.)
+
+`wtm project edit` and the step-by-step registration below need **wtm >= 0.3.0**;
+`wtm --version` tells you what is installed, and an older binary is the user's to
+upgrade, not yours.
 
 If the project is not registered, switch to Setup mode rather than improvising.
 
@@ -118,14 +122,25 @@ left it (schema, migration table, whatever the migrations create) but never the 
 data, because seeds change often and replay fast. A brand-new stack prints the
 reminder once, with the command to run. Run it before concluding the app is broken.
 
+**Committing from a worktree.** wtm drops files of its own at the root of the
+worktree (`.git-container`, `.db-snapshot`, `.wtm-snapshot.yaml`, `.wtm-ports.yaml`)
+and a `.worktrees` directory in the main checkout. Since 0.3.0 they are recorded in
+the repository's `.git/info/exclude`, so `git status` stays clean and `git add -A` is
+safe. Never add them to the project's `.gitignore`, which is versioned and belongs to
+the project, and never delete them to "clean up" a worktree: they are what its stack
+mounts. On an older wtm they show up as untracked, so stage explicit paths rather than
+everything.
+
 ## Discipline §3 — isolation (workflow-rules)
 
 Once a project is managed by `wtm`, the shared stack and the worktree stacks are two
 different things and must stay that way.
 
 - **Never** run a bare `docker compose up/down/restart/stop` for a worktree stack. It
-  ignores the generated compose overlays (`.wtm-snapshot.yaml`, the ports override)
-  and the `COMPOSE_FILE` wiring. Use `wtm start` / `wtm stop`.
+  ignores the compose files wtm generates and hands to docker as extra `-f`
+  (`.wtm-snapshot.yaml` for the dump, `.wtm-ports.yaml` for ports written as
+  literals), and the compose project name that isolates it. Use `wtm start` /
+  `wtm stop`.
 - **Never** touch the main repository's stack, another worktree's stack, or a shared
   database, to make your own task pass.
 - **Clean up your footprint** at the end of a task: `wtm stop <branch>` when you may
@@ -170,11 +185,20 @@ user run it. Do not run it yourself.
 
 ```bash
 git rev-parse --show-toplevel     # from a worktree, resolve the main repository first
-wtm project list                  # already registered? then offer to review config.json instead
+wtm project list                  # already registered?
 ```
 
 The registry lives in `~/.config/wtm/config.json` (relocatable via `WTM_CONFIG_DIR`).
-An already-registered project is edited there, not re-created.
+An already-registered project is changed with `wtm project edit <name>`, which touches
+only the flags it is given. **Never propose `project remove` then `project create` to
+change a setting**: that hands out a fresh port offset and forgets the recorded
+worktree indices, so every stack already running changes ports and compose project
+name.
+
+```bash
+wtm project edit my-app --dump --app-service backend   # add the backup to a project
+wtm project edit my-app --base main                    # change the base branch
+```
 
 ### 2. Discover the compose
 
@@ -209,6 +233,13 @@ wtm project create my-app --dir ~/dev/projects/my-app --base develop \
   --migrate 'python manage.py migrate' \
   --env 'DB_NAME={{database}}'
 ```
+
+Hand over the full command: the interview is done, and a command the user can read
+beats a walk they have to answer. Mention that `wtm project create my-app` alone
+would ask the same things one question at a time (services read from the compose
+file, current values as defaults), which is the way out when the interview left
+something unsettled. Both are theirs to run: the walk waits on their answers, so
+never start it yourself.
 
 Explain what it writes, then wait. Once the user has run it, the follow-up is
 `wtm backup refresh my-app` (starts the stack if needed) and `wtm doctor` to confirm
