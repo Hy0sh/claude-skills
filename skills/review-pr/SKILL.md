@@ -16,6 +16,7 @@ Review the GitHub pull request number $ARGUMENTS.
 
 !`gh pr view $ARGUMENTS --json title,body,author,state,files,additions,deletions,commits,headRefName,baseRefName,isCrossRepository`
 !`gh pr diff $ARGUMENTS`
+!`gh pr checks $ARGUMENTS`
 
 ## ⚙️ Required setup before reading any file
 
@@ -52,14 +53,18 @@ Proceed dimension by dimension, covering only the ones the diff actually touches
 
 **Self-verify every blocker and major before reporting it.** For each, re-read the real code and trace the full flow (e.g. frontend → backend) while actively trying to **refute your own finding**: is it already neutralised upstream? a misread of the base branch? an i18n "missing key" that pluralisation resolves? Drop refuted findings, and surface notable ones in a short "faux positifs écartés" note so the author sees what was considered and dismissed. Dedupe findings that recur across dimensions. Suggestions and positives need no verification.
 
-**Then close the gap a read alone can't close: attempt an actual run.** A static trace can miss a guard elsewhere in the call chain, or assume framework behavior instead of reading what it actually does (e.g. how *this* project's exception handler responds to an unhandled exception, not what DRF/Django does by default). Before finalizing severity on any blocker/major, try to **execute** the reproduction, not just read code that plausibly leads to it.
+**Do not run the project's checks — the GitHub CI already did.** A review never runs the test suite, the linters, the formatters, the type-check or the build. The CI ran all of them on the PR head; `gh pr checks` (prefetched above) is the authoritative result, and re-running them locally burns minutes, spins up stacks, mutates databases and produces failures caused by the local setup rather than by the PR — noise that has to be untangled before it can be discarded.
 
-Respect the same isolation constraints as any other execution in this environment — most projects using worktrees carry their own rules for this (check the project's CLAUDE.md / memory for a worktree-docker or similar convention); absent a project-specific one, default to:
-- Never restart, stop, `down`, or reconfigure a shared `docker compose` stack, and never write to a shared/dev database — other sessions may depend on either being untouched.
-- Prefer something disposable and scoped to the review: a throwaway test (backend: a one-off `manage.py test` case or an isolated `manage.py shell` call exercising the exact call site; frontend: `yarn test -- --testPathPattern=<file>` or a small throwaway test typing/dragging the exact input), or an isolated container/worktree stack the project's own tooling already knows how to spin up.
-- A real existing test in the repo that already exercises half the chain (e.g. the backend rejecting a value) counts as run-verification for that half — don't re-derive it by hand, but don't let it stand in for the half it doesn't cover either.
+Read the CI signal instead, and read it precisely:
+- **All green** → the suite passes, the build compiles, the format is clean, the custom gates pass. Never report "the tests might fail" or "this might not compile" against a green CI: if a static trace suggests a compile/lint/test failure, the trace is wrong or the gate does not cover that path — say which. State the CI verdict and the head SHA it ran on in the review's overview.
+- **Red or missing** → name the failing job, open it (`gh run view <run-id> --log-failed` or the job URL from `gh pr checks`) and report the real failure. A red CI is itself a blocker; do not re-derive it locally.
+- **Stale** (the checks ran on an older SHA than `origin/<headRefName>`) → say so explicitly rather than crediting the PR head with a run it never got.
 
-**When a run genuinely can't be set up** (no environment available, prohibitive setup cost for the finding's weight) — say so explicitly rather than quietly reporting a traced finding as if it were run-verified. Push the static trace as far as concrete evidence allows instead of stopping at "plausible": read the actual call site the finding depends on (not an assumed one), read the actual handler/middleware/framework code involved (not an assumed default), and cite any existing repo test that already proves part of the chain. Then offer the user a follow-up run if they want the remaining gap closed. Never assign blocker/major severity, or say "reproductible", on a read alone when a run was feasible and skipped — and when the user asks whether a finding actually reproduces, this is the bar to re-apply: point to the run's real output, or to the specific concrete evidence that closes every gap a run would have closed.
+CI covers "does it build and pass", not "does it behave correctly". Behaviour is established by a **rigorous static trace**: read the actual call site the finding depends on (not an assumed one), the actual handler/middleware/framework code involved (not an assumed default), and cite any existing repo test that already proves part of the chain — an existing green test exercising half the chain is real evidence for that half, and the CI proves it ran.
+
+**One targeted probe is allowed, and only one kind.** When a blocker/major genuinely hinges on a fact a read cannot settle (what a value actually is at runtime, what an existing helper actually returns), a single scoped, read-only, seconds-long probe is fine — a `manage.py shell` one-liner, a single `yarn test -- --testPathPattern=<file>` on an already-running stack. Hard limits, no exceptions: never start, restart, stop or `down` a stack; never create, seed, migrate or write to any database; never install dependencies; never run a whole app's or suite's tests. If the probe needs any of that, it is not allowed — skip it.
+
+**Always state the evidence level of each blocker/major**, in one clause: "tracé statiquement" vs "confirmé par le test X, vert en CI" vs "confirmé par une sonde". Never present a static trace as if it were observed at runtime. When the trace leaves a genuine gap, name the gap and offer the user a follow-up run they can approve — do not close it silently, and do not downgrade a well-traced finding merely because no run happened.
 
 **Severity gate — reproducibility and probability, not just plausibility.** Before keeping a finding at blocker/major, apply both checks:
 
@@ -78,6 +83,7 @@ Then provide a structured review:
 ## 🔍 Overview
 - What the PR does
 - Key changes
+- CI verdict and the head SHA it ran on (from `gh pr checks`), in one line
 
 ## ❗ Blockers (must fix before merge)
 - Critical bugs, broken logic, security issues
@@ -92,6 +98,7 @@ Then provide a structured review:
 - Are new features tested?
 - Missing edge cases?
 - Test quality
+- Judge the tests by reading them, not by running them — the CI result already says whether they pass
 
 ## 🔒 Security
 - Injection risks
@@ -156,6 +163,8 @@ Report the resulting `html_url` for each posted comment in a short table. If the
 - DO NOT use `gh pr comment` (top-level conversation comment) — comments go inline via the `pulls/<pr>/comments` API only
 - DO NOT simulate a GitHub review action
 - DO NOT post anything before the user has seen the drafts AND explicitly approved posting
+- DO NOT run the test suite, the linters, the formatters or the build — read `gh pr checks`
+- DO NOT start, stop or reconfigure a stack, and DO NOT create, seed or migrate a database
 - The review text itself is output as plain text in this response
 
 After the review (and any posting), offer to switch back to the branch the user was on before the checkout.
