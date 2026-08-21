@@ -16,7 +16,11 @@ Review the GitHub pull request number $ARGUMENTS.
 
 !`gh pr view $ARGUMENTS --json title,body,author,state,files,additions,deletions,commits,headRefName,baseRefName,isCrossRepository`
 !`gh pr diff $ARGUMENTS`
-!`gh pr checks $ARGUMENTS`
+!`gh pr checks $ARGUMENTS || true`
+
+`gh pr checks` exits non-zero when a job is pending (8) or failing (1) — both are
+states this review has to report on, hence the `|| true`. Never drop it: without it
+the skill refuses to load on any PR whose CI is not entirely green.
 
 ## ⚙️ Required setup before reading any file
 
