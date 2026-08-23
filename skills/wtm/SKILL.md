@@ -4,9 +4,10 @@ description: >
   Use when working, running, testing or visually verifying anything inside a git
   worktree backed by worktree-manager (`wtm`), or when a new isolated worktree is
   needed for a task. `wtm` is a Go CLI that creates a worktree with its own Docker
-  Compose stack (remapped ports, separate volumes) and a pre-migrated Postgres dump
-  restored in seconds, so parallel agents never collide with the main stack or with
-  each other. Covers the worktree lifecycle, reaching into the stack, and the
+  Compose stack (remapped ports, separate volumes) and a pre-migrated database dump
+  restored in seconds (Postgres, MySQL, MariaDB, MongoDB or SQLite), so parallel
+  agents never collide with the main stack or with each other. Covers the worktree
+  lifecycle, reaching into the stack, and the
   isolation/runtime-proof disciplines. Invoked as `/wtm setup`, it instead guides
   registering a project in the `wtm` registry, or changing one already there.
 argument-hint: [setup]
@@ -56,11 +57,14 @@ If `wtm` is missing, hand the user the command and stop:
 GOBIN=$HOME/.local/bin go install github.com/Hy0sh/worktree-manager/cmd/wtm@latest
 ```
 
-(needs Go >= 1.24; `git` >= 2.31 and Docker Compose v2.24+ are required at runtime.)
+(needs Go >= 1.25; `git` >= 2.31 and Docker Compose v2.24+ are required at runtime.)
 
-`wtm project edit` and the step-by-step registration below need **wtm >= 0.3.0**;
-`wtm --version` tells you what is installed, and an older binary is the user's to
-upgrade, not yours.
+`wtm project edit` and the step-by-step registration below need **wtm >= 0.3.0**. The
+guardrails this skill relies on land in **0.4.3**: a refresh refuses to publish a dump
+of a database the migrations never reached, `doctor` reports port clashes between
+projects and the volumes of removed worktrees, and a refused `remove` leaves the stack
+running. `wtm --version` tells you what is installed, and an older binary is the
+user's to upgrade, not yours.
 
 If the project is not registered, switch to Setup mode rather than improvising.
 
@@ -85,6 +89,12 @@ wtm stop feat/my-branch                  # stop the stack, keep the worktree
 wtm remove feat/my-branch                # stop + remove the worktree, local branch kept
 wtm remove feat/my-branch --force        # despite modified tracked files
 ```
+
+A `remove` that finds modified tracked files refuses and leaves everything as it was,
+stack included, so the message is not a half-done removal. It happens for real on
+projects whose dev server regenerates a tracked file (TanStack Router's
+`routeTree.gen.ts`, generated clients): read the listed paths before reaching for
+`--force`, since the flag discards those changes.
 
 An existing branch is reused, and the base argument is then ignored. A local branch
 is checked out as-is; a branch that only exists on a remote is checked out tracking
@@ -146,8 +156,11 @@ different things and must stay that way.
 - **Clean up your footprint** at the end of a task: `wtm stop <branch>` when you may
   come back to it, `wtm remove <branch>` when the work is done. Never stop or remove a
   worktree you did not create.
-- The Postgres dump is shared through a `.db-snapshot` symlink and lives in
-  `~/.config/wtm/backups/`. Do not edit it by hand; `wtm backup refresh` regenerates it.
+- The dump lives in `~/.config/wtm/backups/` and is shared through a `.db-snapshot`
+  symlink, except for a file-based engine (SQLite): there the dump is copied into the
+  worktree at the project's `db_path`, and only when nothing is there yet, so a
+  database being worked in is never clobbered. Do not edit either by hand;
+  `wtm backup refresh` regenerates it.
 
 ## Discipline §4 — runtime proof
 
@@ -165,9 +178,15 @@ observe through the main stack's ports, they serve the other code.
 
 ## Troubleshooting
 
-- `wtm doctor` flags compose files whose ports are hardcoded and therefore cannot be
-  isolated, and reports Docker VM memory against measured per-stack usage. It warns
-  before saturation without blocking.
+- `wtm doctor` reports Docker VM memory against measured per-stack usage, each
+  project's stride, offset and engine, the ports two projects would both publish, and
+  the volumes of removed worktrees. Those volumes matter beyond disk: the index
+  allocator steps over any index docker still holds volumes for, so a new worktree
+  lands further out with higher ports. `doctor` prints the `docker volume rm` line to
+  drop them, which is the user's to run.
+- A port clash between two projects is not something wtm can fix for you: offsets are
+  handed out once, at registration. Either the two stacks do not run together, or
+  `port_offset` changes in `config.json` and that project's worktrees are recreated.
 - A stale dump is never a blocker: `create` says how far behind it is, and the app
   migrates on top of it. `wtm backup refresh <project>` saves the replay.
 - Ports are rebased as `20000 + project offset + default port + worktree index *
@@ -188,6 +207,10 @@ git rev-parse --show-toplevel     # from a worktree, resolve the main repository
 wtm project list                  # already registered?
 ```
 
+The directory has to be a git repository: wtm creates worktrees, and registration is
+refused outright rather than failing later, mid-refresh. A checkout whose `.git` was
+never created (a source tree downloaded rather than cloned) is not a wtm project.
+
 The registry lives in `~/.config/wtm/config.json` (relocatable via `WTM_CONFIG_DIR`).
 An already-registered project is changed with `wtm project edit <name>`, which touches
 only the flags it is given. **Never propose `project remove` then `project create` to
@@ -207,10 +230,22 @@ docker compose config --format json 2>/dev/null \
   | python3 -c "import sys,json;d=json.load(sys.stdin);[print(f\"{s:16} image={v.get('image','-')} ports={[p.get('target') for p in v.get('ports',[])]}\") for s,v in sorted(d['services'].items())]"
 ```
 
-From the output and the repository, infer: which service is Postgres (default `db`),
-which service runs the migrations (`backend`, `api`, `php-nginx`…), and the
+From the output and the repository, infer: which service is the database (default
+`db`), which service runs the migrations (`backend`, `api`, `php-nginx`…), and the
 framework's migration command. A project with no compose file works too, there is
 simply no stack to start.
+
+Two things to read in that output rather than discover later:
+
+- **The database image.** wtm names the engine from it and only warns when it cannot,
+  assuming Postgres. An unrecognised image (a proxy, an internal registry name, a
+  variant nobody listed) means passing `--db-engine` explicitly, or the first refresh
+  runs `pg_dump` against something else entirely.
+- **`container_name:`.** wtm rebases ports, volumes and the compose project name, but
+  a pinned container name is none of those, so the main stack and a worktree stack
+  cannot both run. Registration warns about it; the fix belongs to the project's
+  compose file, and it is worth telling the user before they discover it at the first
+  parallel start.
 
 ### 3. Interview (AskUserQuestion, only what discovery cannot answer)
 
@@ -220,7 +255,14 @@ simply no stack to start.
 - **Migration path** — the service and the commands that must run before the dump is
   taken → `--app-service`, `--deps`, `--migrate`
 - **Database wiring** — how does the app learn which database to hit? `{{database}}`
-  is replaced by the temporary database's name → `--env KEY=VALUE`, repeatable
+  is replaced by the throwaway database's name → `--env KEY=VALUE`, repeatable. This
+  is the setting that most often makes a refresh useless, so read the app's own
+  configuration rather than guessing the variable name: map the very one the compose
+  service already sets (`DATABASE_URL`, `DB_NAME`, `MONGO_URL`…), password and all,
+  with only the database name replaced by `{{database}}`. Get it wrong and the
+  migrations run against the project's real database while the throwaway one stays
+  empty; since 0.4.3 the refresh fails there instead of publishing an empty dump, and
+  the fix is always this mapping
 - **Git-dir bind-mount** — only if the compose mounts the git-dir into a container
   → `--git-container`, otherwise leave it off, it creates nothing
 
