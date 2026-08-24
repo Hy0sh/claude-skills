@@ -153,17 +153,20 @@ Present the drafts to the user for review **before** posting anything.
 
 Posting is the only mutation this skill allows, and only after the user explicitly approves (e.g. "post them", "commente", "vas-y"). Until then, the comments stay as proposals in your response.
 
-When approved, post each one as an inline review comment on the PR head. Use the verified head SHA (`git rev-parse origin/<headRefName>`):
+When approved, post each one as an inline review comment on the PR head. Use the verified head SHA (`git rev-parse origin/<headRefName>`). Comment bodies hold backticks, newlines and quotes, so write each one to a file first and let `gh` read it — `-F key=@file` loads the file, `-f` never does (it would post the literal `@/path/to/file`):
 
 ```bash
+# body written beforehand to <file>.md (scratchpad), never inlined in the command
 gh api "repos/<owner>/<repo>/pulls/<pr>/comments" --method POST \
   -f commit_id="<head-sha>" \
   -f path="<path>" \
   -F line=<final-file-line> \
   -f side="RIGHT" \
-  -f body="<comment text>" \
+  -F body=@<file>.md \
   --jq '.html_url'
 ```
+
+Read back the `body` of the created comment (or open the returned `html_url`) before reporting it as posted: a body that is a single line starting with `@` means the file was not expanded and the comment has to be deleted (`gh api -X DELETE "repos/<owner>/<repo>/pulls/comments/<id>"`) and posted again.
 
 Report the resulting `html_url` for each posted comment in a short table. If the user only wants some of them posted, post that subset.
 
