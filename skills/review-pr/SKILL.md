@@ -28,7 +28,22 @@ The diff alone is **not enough** to review correctly: any file you `Read` would 
 
 PR branches are also **remote-authoritative**: contributors force-push freely. A local copy from a previous session is almost certainly stale. Always treat `origin/<headRefName>` as the source of truth.
 
-Before producing the review:
+**Decide where the PR gets checked out before you check it out anywhere.** Run `wtm project list` first — that single read-only command picks the route below, and getting the order wrong is not recoverable later in the session. Checking the PR branch out in the *current* worktree occupies it, and git then refuses `wtm create <headRefName>` for the rest of the session (`fatal: '<branch>' is already used by worktree at ...`). That dead end lands exactly when a blocker or major needs runtime confirmation, with no way out but abandoning the checkout — so take route A up front whenever it applies, even when you expect to find nothing worth running.
+
+### Route A — project registered with `wtm` (preferred)
+
+1. Verify the current worktree is clean (`git status`). If not, **stop and ask the user** — never stash or discard work.
+2. `wtm create <headRefName>`. One command does the whole setup: it fetches (a branch that only exists on the remote included), checks the PR branch out in **its own** worktree, starts that worktree's isolated stack on remapped ports, and plays the project's `post_create` seed if it has one. Invoke the `wtm` skill for the lifecycle and its two disciplines.
+   - The branch already has a wtm worktree (`wtm list`)? `wtm start <headRefName>`, then resync it: `wtm run <headRefName> -- git fetch origin <headRefName>` then `wtm run <headRefName> -- git reset --hard origin/<headRefName>`. A review worktree is disposable; resetting it destroys nothing.
+   - `wtm create` refuses because the branch is checked out elsewhere? Free it there (`git checkout <that worktree's own branch>`) and retry. Never work around it with a throwaway branch pointing at the same commit — that gets you a stack whose branch name matches nothing on the PR.
+   - No seed ran and the stack needs data? Seed it with the project's own seed command via `wtm exec`, never with a reset script (it drops the restored dump).
+3. `cd $(wtm path <headRefName>)` — read every file, and run every `git diff`, from there.
+4. Confirm you are on the PR head **in that worktree**: `git rev-parse --abbrev-ref HEAD` matches `headRefName`, **and** `git rev-parse HEAD` matches `git rev-parse origin/<headRefName>`. Both must agree before you read any file.
+5. Clean up at the end: `wtm remove <headRefName>`, or `wtm stop <headRefName>` if the user may come back to it. Never stop or remove a worktree you did not create.
+
+The user's own worktree is never touched on this route, so there is no branch to restore when the review ends.
+
+### Route B — project not registered with `wtm`
 
 1. Verify the worktree is clean (`git status`). If not, **stop and ask the user** — never stash or discard work.
 2. Remember the current branch so you can offer to restore it at the end.
@@ -37,7 +52,8 @@ Before producing the review:
    - If `gh pr checkout` reports divergence (a stale local branch exists from a prior session and the remote was force-pushed since), the local branch is disposable — it only exists for review purposes. Resync it with `git reset --hard origin/<headRefName>` (after confirming the worktree is clean). PR branches are not user work; resetting them does not destroy anything.
    - If the worktree is dirty, network fails, or anything else blocks the checkout, surface the error and stop.
 5. Confirm you are on the PR head: `git rev-parse --abbrev-ref HEAD` matches `headRefName`, **and** `git rev-parse HEAD` matches `git rev-parse origin/<headRefName>`. Both must agree before you read any file.
-6. Only then start reading files. Every claim about file content must come from the PR branch, not from the diff or the base branch.
+
+On either route: only then start reading files. Every claim about file content must come from the PR branch, not from the diff or the base branch.
 
 ## 🔄 Re-verify before producing the final review
 
@@ -46,6 +62,8 @@ PRs can be force-pushed **during** your review. Just before you write the struct
 1. Re-run `git fetch origin <headRefName>`.
 2. Compare `git rev-parse HEAD` to `git rev-parse origin/<headRefName>`.
 3. If they differ, the PR moved while you were reading. Reset to the new remote head, re-read the affected files, and only then produce the review. Do not finalise a review against a known-stale snapshot.
+
+On route A these three run inside the wtm worktree (`wtm run <headRefName> -- …`, or from `$(wtm path <headRefName>)`), never in the user's own worktree — and a reset there means the running stack now serves the new head, so re-check a symbol from the new diff inside the container before reusing any earlier observation.
 
 If at any point the user says "you didn't pull" / "the code is outdated" / "I pulled the branch" / similar, treat that as a hard signal: re-fetch, recompare HEAD to `origin/<headRefName>`, and re-verify the diff before defending any prior comment.
 
@@ -70,7 +88,9 @@ CI covers "does it build and pass", not "does it behave correctly". Behaviour st
 
 **Confirm every blocker and major at runtime before announcing it.** Once the static trace holds, drive the real surface until you have observed the defect: the wrong label on screen, the wrong response body, the request the frontend actually sends. Cheapest first — a scoped read-only probe (`manage.py shell` one-liner, `yarn test -- --testPathPattern=<file>`) on an **already-running** stack settles some findings in seconds. When the finding is about what a user sees, that is not enough, and you spin up an isolated stack for the worktree and drive it.
 
-Isolation is the hard limit, not the effort. **Never** touch the shared stack, another worktree's stack, or a shared database. In a project registered with `wtm`, that means `wtm start <branch>`, seed the worktree's own database, and observe on the remapped ports (the `wtm` skill covers the lifecycle). Outside such a project, use whatever disposable equivalent the project offers. Clean up your footprint when the review is done. And check the container actually serves your checked-out code (`grep` a symbol from the diff inside it) before trusting what you see.
+Isolation is the hard limit, not the effort. **Never** touch the shared stack, another worktree's stack, or a shared database. On route A the stack you need is already up from the setup step — reach it with `wtm exec <headRefName> -- …` and observe on the ports `wtm create`/`wtm list` printed, never on the main stack's ports (they serve the other code). Outside a `wtm` project, use whatever disposable equivalent the project offers. Clean up your footprint when the review is done. And check the container actually serves your checked-out code (`grep` a symbol from the diff inside it) before trusting what you see.
+
+**A hand-rolled `docker run` is not that equivalent, and neither is a probe that reconstructs the input by hand.** Both are the standard way this discipline gets quietly dropped: the container is isolated, so it feels compliant, but a probe that imports one module and feeds it a literal you wrote yourself only observes the half of the chain you already believed. It proves "*if* this value arrives here, the output is wrong" — never that the value arrives. That is a static trace with extra steps, and it must be labelled as one. Drive the endpoint, the command, or the screen, on the stack from the setup step.
 
 **State the evidence level of each blocker/major**, in one clause: "confirmé au runtime (capture)" vs "confirmé par le test X, vert en CI" vs "confirmé par une sonde". Never present a static trace as if it were observed. **A finding that runtime did not confirm is not a blocker or a major** — either the trace was wrong and it goes away, or it stays as a suggestion saying plainly what could not be observed. Say what you observed and how; when the runtime check is genuinely out of reach (no stack for this project, an environment you cannot reproduce), say that too, and downgrade rather than announce.
 
@@ -180,4 +200,4 @@ Report the resulting `html_url` for each posted comment in a short table. If the
 - DO NOT start, stop or reconfigure a stack, and DO NOT create, seed or migrate a database
 - The review text itself is output as plain text in this response
 
-After the review (and any posting), offer to switch back to the branch the user was on before the checkout.
+After the review (and any posting), clean up the setup you created. On route A, offer `wtm remove <headRefName>` (or `wtm stop <headRefName>` if the user may come back to it) — there is no branch to restore, the user's worktree was never touched. On route B, offer to switch back to the branch the user was on before the checkout.
