@@ -47,7 +47,7 @@ Read-only commands (`wtm --version`, `wtm doctor`, `wtm list`, `wtm backup list`
 
 ```bash
 wtm --version     # is the binary there?
-wtm doctor        # config path, Docker VM memory, per-project stride and offset
+wtm doctor        # version, config path, Docker VM memory, build cache, stride and offset
 wtm project list  # is this project registered?
 ```
 
@@ -63,8 +63,10 @@ GOBIN=$HOME/.local/bin go install github.com/Hy0sh/worktree-manager/cmd/wtm@late
 guardrails this skill relies on land in **0.4.3**: a refresh refuses to publish a dump
 of a database the migrations never reached, `doctor` reports port clashes between
 projects and the volumes of removed worktrees, and a refused `remove` leaves the stack
-running. `wtm --version` tells you what is installed, and an older binary is the
-user's to upgrade, not yours.
+running. Three things below need **0.5.0**: `post_create`, the compose environment
+`wtm run` sets, and a `remove` that also drops the images its stack built.
+`wtm --version` tells you what is installed, `doctor` says when a newer one is
+published, and an older binary is the user's to upgrade, not yours.
 
 If the project is not registered, switch to Setup mode rather than improvising.
 
@@ -86,7 +88,7 @@ wtm create feat/pushed-by-someone-else   # same command to pick up a remote bran
 wtm list                                 # INDEX / BRANCH / STATUS / PATH
 wtm start feat/my-branch                 # bring a stopped stack back up
 wtm stop feat/my-branch                  # stop the stack, keep the worktree
-wtm remove feat/my-branch                # stop + remove the worktree, local branch kept
+wtm remove feat/my-branch                # stack, volumes and built images go, branch kept
 wtm remove feat/my-branch --force        # despite modified tracked files
 ```
 
@@ -118,8 +120,10 @@ wtm exec feat/my-branch -- python manage.py seed_data
 wtm exec feat/my-branch -- bash
 wtm exec feat/my-branch --service db -- psql -U postgres
 
-# on the host, with the worktree as working directory
+# on the host, with the worktree as working directory, COMPOSE_PROJECT_NAME and
+# COMPOSE_FILE pointing at this worktree's stack
 wtm run feat/my-branch -- git status
+wtm run feat/my-branch -- scripts/some-compose-script.sh
 cd $(wtm path feat/my-branch)
 ```
 
@@ -129,8 +133,16 @@ reconstruct it by hand and do not guess container names.
 
 **A fresh worktree needs its own seed.** The dump restores the database as `migrate`
 left it (schema, migration table, whatever the migrations create) but never the seed
-data, because seeds change often and replay fast. A brand-new stack prints the
-reminder once, with the command to run. Run it before concluding the app is broken.
+data, because seeds change often and replay fast. A project with a `post_create`
+seeds itself, right after the stack answers; without one, a brand-new stack prints
+the reminder once, with the command to run. Run it before concluding the app is
+broken.
+
+**Never seed with the project's own reset script.** Those scripts (`reset-dev-db.sh`
+and friends) drop the schema and migrate again, which throws away the restored dump
+and pays for the migration history wtm exists to skip. Take the seed steps out of it
+and run those alone, and if the project keeps hitting this, `post_create` is where the
+seed belongs.
 
 **Committing from a worktree.** wtm drops files of its own at the root of the
 worktree (`.git-container`, `.db-snapshot`, `.wtm-snapshot.yaml`, `.wtm-ports.yaml`)
@@ -146,11 +158,14 @@ everything.
 Once a project is managed by `wtm`, the shared stack and the worktree stacks are two
 different things and must stay that way.
 
-- **Never** run a bare `docker compose up/down/restart/stop` for a worktree stack. It
-  ignores the compose files wtm generates and hands to docker as extra `-f`
-  (`.wtm-snapshot.yaml` for the dump, `.wtm-ports.yaml` for ports written as
-  literals), and the compose project name that isolates it. Use `wtm start` /
-  `wtm stop`.
+- **Never** run a bare `docker compose up/down/restart/stop` for a worktree stack
+  from your own shell. It addresses a project named after the directory it runs from,
+  and it loads neither `.wtm-snapshot.yaml` (the dump) nor `.wtm-ports.yaml` (ports
+  written as literals), which wtm hands to docker as extra `-f`. Use `wtm start` /
+  `wtm stop`: they also reprovision what the stack mounts and warn about the Docker
+  VM's memory. Through `wtm run` those two variables are set, so a script of the
+  project reaches the right stack with the right files; that is for the project's own
+  scripts, not a way around the lifecycle commands.
 - **Never** touch the main repository's stack, another worktree's stack, or a shared
   database, to make your own task pass.
 - **Clean up your footprint** at the end of a task: `wtm stop <branch>` when you may
@@ -178,12 +193,16 @@ observe through the main stack's ports, they serve the other code.
 
 ## Troubleshooting
 
-- `wtm doctor` reports Docker VM memory against measured per-stack usage, each
+- `wtm doctor` reports the running version and whether a newer one is published,
+  Docker VM memory against measured per-stack usage, the size of the build cache, each
   project's stride, offset and engine, the ports two projects would both publish, and
-  the volumes of removed worktrees. Those volumes matter beyond disk: the index
-  allocator steps over any index docker still holds volumes for, so a new worktree
-  lands further out with higher ports. `doctor` prints the `docker volume rm` line to
-  drop them, which is the user's to run.
+  what removed worktrees left behind: their volumes and the images their stacks built.
+  Those volumes matter beyond disk: the index allocator steps over any index docker
+  still holds volumes for, so a new worktree lands further out with higher ports.
+  `doctor` prints the `docker volume rm` and `docker rmi` lines that drop them, which
+  are the user's to run. Before 0.5.0 nothing dropped those images on `remove`, so a
+  long-lived machine can have a hundred of them; the build cache is only ever
+  reported, since buildkit attributes none of it to a project.
 - A port clash between two projects is not something wtm can fix for you: offsets are
   handed out once, at registration. Either the two stacks do not run together, or
   `port_offset` changes in `config.json` and that project's worktrees are recreated.
@@ -265,6 +284,10 @@ Two things to read in that output rather than discover later:
   the fix is always this mapping
 - **Git-dir bind-mount** — only if the compose mounts the git-dir into a container
   → `--git-container`, otherwise leave it off, it creates nothing
+- **Seed of a fresh worktree** — the command that makes a restored database usable
+  (`manage.py seed_data`, a dev-users command…), played in the application service
+  once the database answers → `--post-create`. Ask for the seed steps only: a script
+  that resets the database undoes the restore
 
 ### 4. Present the command, do not run it
 
@@ -273,7 +296,8 @@ wtm project create my-app --dir ~/dev/projects/my-app --base develop \
   --dump --app-service backend \
   --deps 'poetry install --no-root --with dev' \
   --migrate 'python manage.py migrate' \
-  --env 'DB_NAME={{database}}'
+  --env 'DB_NAME={{database}}' \
+  --post-create 'python manage.py create_dev_users'
 ```
 
 Hand over the full command: the interview is done, and a command the user can read
