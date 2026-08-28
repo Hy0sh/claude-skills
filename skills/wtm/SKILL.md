@@ -22,7 +22,10 @@ Keep commands, paths and technical identifiers unchanged.
 yourself**. If something is missing, print the exact command and ask the user to run
 it, then wait. Same rule for `wtm project create`, `wtm project edit` and `wtm project
 remove`: they write to the user's global registry, so show the full command and get an
-explicit "go ahead" first.
+explicit "go ahead" first. `wtm backup remove` belongs to the same list: it throws
+away the migration history the tool exists not to replay, only a long
+`backup refresh` brings it back, and called without an argument it takes the current
+directory's project.
 
 Read-only commands (`wtm --version`, `wtm doctor`, `wtm list`, `wtm backup list`,
 `wtm project list`) need no approval.
@@ -43,6 +46,11 @@ Read-only commands (`wtm --version`, `wtm doctor`, `wtm list`, `wtm backup list`
 - You need runtime proof (screenshot, API response) coming from the worktree's own
   code, not from the shared stack.
 
+Being in *a* worktree is not enough: wtm only owns the ones it created, under
+`<repo>/.worktrees/<branch>`. A worktree cut by another tool (`claude -w`, under
+`.claude/worktrees`) has no index, no provisioned `.env` and no stack, does not show
+up in `wtm list`, and none of the commands below can do anything for it.
+
 ## Before anything
 
 ```bash
@@ -57,14 +65,27 @@ If `wtm` is missing, hand the user the command and stop:
 GOBIN=$HOME/.local/bin go install github.com/Hy0sh/worktree-manager/cmd/wtm@latest
 ```
 
-(needs Go >= 1.25; `git` >= 2.31 and Docker Compose v2.24+ are required at runtime.)
+(needs Go >= 1.24; `git` >= 2.31 and Docker Compose v2.24+ are required at runtime.)
+Without Go, the [latest release](https://github.com/Hy0sh/worktree-manager/releases/latest)
+carries a binary per platform (darwin and linux, arm64 and amd64) plus a `SHA256SUMS`;
+that download and its move onto the PATH are the user's to run too.
 
-`wtm project edit` and the step-by-step registration below need **wtm >= 0.3.0**. The
-guardrails this skill relies on land in **0.4.3**: a refresh refuses to publish a dump
-of a database the migrations never reached, `doctor` reports port clashes between
+`wtm project edit` and the step-by-step registration below need **wtm >= 0.3.0**, and
+the guardrails this skill relies on land in **0.4.3**: a refresh refuses to publish a
+dump of a database the migrations never reached, `doctor` reports port clashes between
 projects and the volumes of removed worktrees, and a refused `remove` leaves the stack
-running. Three things below need **0.5.0**: `post_create`, the compose environment
-`wtm run` sets, and a `remove` that also drops the images its stack built.
+running. What the sections below describe then arrived version by version:
+
+- **0.5.0** — `post_create`, the compose environment `wtm run` sets, and a `remove`
+  that also drops the images its stack built.
+- **0.6.0** — `--migrations-path`, without which a project whose migrations live
+  outside the default pathspec has its dump called up to date forever.
+- **0.7.0** — the wait on the application service before `post_create`, bounded by
+  `--ready-timeout` and `--ready-interval`.
+- **0.8.0** — `--no-post-create`, `stop --all`, `remove --all`.
+- **0.9.0** — `create --run` and `--exec`, and the memory question a create asks when
+  it runs on a terminal, with `--ignore-memory` to answer it in advance.
+
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
 
@@ -84,19 +105,30 @@ wtm create feat/my-branch                # worktree + stack, base = the project'
 wtm create my-app feat/my-branch main    # explicit project and base branch
 wtm create feat/my-branch --no-start     # prepare the worktree, leave the stack down
 wtm create feat/pushed-by-someone-else   # same command to pick up a remote branch
+wtm create feat/my-branch --no-post-create        # stack up, seed skipped
+wtm create feat/my-branch --ignore-memory         # never ask, however tight the RAM
+wtm create feat/my-branch --exec 'npm run seed'   # a shell line in the app container
+wtm create feat/my-branch --run 'pnpm install'    # a shell line on the host, once ready
 
 wtm list                                 # INDEX / BRANCH / STATUS / PATH
 wtm start feat/my-branch                 # bring a stopped stack back up
 wtm stop feat/my-branch                  # stop the stack, keep the worktree
+wtm stop --all                           # every worktree of the project
 wtm remove feat/my-branch                # stack, volumes and built images go, branch kept
-wtm remove feat/my-branch --force        # despite modified tracked files
+wtm remove feat/my-branch --force        # despite modified tracked files, or a lock
+wtm remove --all -y                      # lists them, asks once, -y answers for you
 ```
 
-A `remove` that finds modified tracked files refuses and leaves everything as it was,
-stack included, so the message is not a half-done removal. It happens for real on
-projects whose dev server regenerates a tracked file (TanStack Router's
-`routeTree.gen.ts`, generated clients): read the listed paths before reaching for
-`--force`, since the flag discards those changes.
+`--all` walks every worktree of the project and a failure never stops the walk: the
+locked or dirty ones are reported together at the end, with a non-zero exit. It also
+takes the whole project, other people's worktrees included, which the isolation
+discipline below rules out unless you created them all.
+
+A `remove` that finds modified tracked files, or a worktree git has locked, refuses
+and leaves everything as it was, stack included, so the message is not a half-done
+removal. It happens for real on projects whose dev server regenerates a tracked file
+(TanStack Router's `routeTree.gen.ts`, generated clients): read the listed paths
+before reaching for `--force`, since the flag discards those changes.
 
 An existing branch is reused, and the base argument is then ignored. A local branch
 is checked out as-is; a branch that only exists on a remote is checked out tracking
@@ -109,6 +141,15 @@ instead of hanging when Docker is slow or down.
 
 Creation only happens behind the `create` verb. Any unknown word is rejected rather
 than silently turned into a branch.
+
+**A create can stop and ask about memory.** Before a stack goes up, wtm measures what
+the pool it has to fit into already holds (the containers' own budget under Docker
+Desktop, the whole machine on a native Linux docker, session and browser included) and
+asks whether to go ahead when one more stack looks like too much. The question only
+comes on a terminal, so an agent under one can hang on it: pass `--ignore-memory` when
+nobody is there to answer. Answering no leaves the worktree without its stack, which
+is what `--no-start` produces, and `wtm start` brings it up later without replaying
+the seed.
 
 ## Working inside a worktree
 
@@ -127,6 +168,26 @@ wtm run feat/my-branch -- scripts/some-compose-script.sh
 cd $(wtm path feat/my-branch)
 ```
 
+`wtm create --run` and `--exec` reach those same two destinations from the create
+itself: `--exec` plays a shell line in the application container, after the project's
+`post_create` and whether or not `--no-post-create` skipped it, `--run` plays one on
+the host with the same compose environment `wtm run` sets, last of all, once the
+addresses have been printed. Both may be given at once. They take a shell line and
+not an argv after `--`, so the quoting is yours to get right (a value that is really
+a flag is refused up front), and a failure is a warning naming the line that replays
+it rather than a failed creation. `--exec` is refused with `--no-start`, having no
+stack to enter.
+
+**Both block the `create` until the command exits**, so neither is a way to leave a
+dev server running: the stack's own services are already up, and anything else
+belongs in a background task. Use them for work that ends (installing dependencies,
+loading a fixture, warming a cache). And neither is remembered from one create to
+the next: they never reach `config.json`, so for a command every worktree of the
+project needs, `post_create` is the place. Weigh what you hand `--run`, though: it
+runs on the host with the user's rights, in a checkout of a branch that may not be
+theirs, so playing that branch's own scripts in the same line as the create is
+exactly as trusting as it sounds. `--exec` is bounded by the container.
+
 Always reach the containers through `wtm exec`. The compose project name is derived
 from the repository, the worktree index and the branch: internal knowledge, do not
 reconstruct it by hand and do not guess container names.
@@ -134,9 +195,21 @@ reconstruct it by hand and do not guess container names.
 **A fresh worktree needs its own seed.** The dump restores the database as `migrate`
 left it (schema, migration table, whatever the migrations create) but never the seed
 data, because seeds change often and replay fast. A project with a `post_create`
-seeds itself, right after the stack answers; without one, a brand-new stack prints
-the reminder once, with the command to run. Run it before concluding the app is
-broken.
+seeds itself; without one, a brand-new stack prints the reminder once, with the
+command to run. Run it before concluding the app is broken. `--no-post-create` skips
+that seed for one worktree, for a branch opened to read rather than to work in, and
+prints the `wtm exec` line that plays it later.
+
+`post_create` does not run as soon as docker says the containers started: wtm waits
+for the database, then for the application service to report itself healthy through
+its `healthcheck:`, or through its first published port read inside the container
+when it declares none. A stack installing its dependencies from its `command:`
+answers minutes later, which is what that wait is for, and a wait that holds says so
+every thirty seconds. A timeout is not a failed creation: the worktree stands and the
+warning names the `wtm exec` line that replays the command. A service with neither a
+healthcheck nor a published port leaves nothing to wait for, and the warning saying
+so points at `project edit --app-service`, the setting that decides where the command
+runs.
 
 **Never seed with the project's own reset script.** Those scripts (`reset-dev-db.sh`
 and friends) drop the schema and migrate again, which throws away the restored dump
@@ -207,7 +280,14 @@ observe through the main stack's ports, they serve the other code.
   handed out once, at registration. Either the two stacks do not run together, or
   `port_offset` changes in `config.json` and that project's worktrees are recreated.
 - A stale dump is never a blocker: `create` says how far behind it is, and the app
-  migrates on top of it. `wtm backup refresh <project>` saves the replay.
+  migrates on top of it. `wtm backup refresh <project>` saves the replay. A dump
+  reported as up to date forever means `migrations_path` does not match the project's
+  layout, not that nothing moved.
+- A worktree missing one of the files its stack mounts fails deep inside docker on a
+  raw mount error. Every `start` lays the links, the `*.env` copies and the compose
+  overrides back down, so that is the repair; what the worktree already holds is left
+  alone, an env file tweaked for the task being its own state rather than a stale
+  copy.
 - Ports are rebased as `20000 + project offset + default port + worktree index *
   stride`. A project already remapping a port on purpose keeps its mapping, and a
   git-tracked `.env` is left alone, so starting a stack never dirties the worktree.
@@ -259,7 +339,10 @@ Two things to read in that output rather than discover later:
 - **The database image.** wtm names the engine from it and only warns when it cannot,
   assuming Postgres. An unrecognised image (a proxy, an internal registry name, a
   variant nobody listed) means passing `--db-engine` explicitly, or the first refresh
-  runs `pg_dump` against something else entirely.
+  runs `pg_dump` against something else entirely. A project on SQLite has no database
+  service to read at all, so it is chosen by hand with `--db-engine sqlite`, and its
+  snapshot is collected through the application service's bind mount: that service
+  has to mount the project directory, otherwise there is nothing to collect from.
 - **`container_name:`.** wtm rebases ports, volumes and the compose project name, but
   a pinned container name is none of those, so the main stack and a worktree stack
   cannot both run. Registration warns about it; the fix belongs to the project's
@@ -268,11 +351,17 @@ Two things to read in that output rather than discover later:
 
 ### 3. Interview (AskUserQuestion, only what discovery cannot answer)
 
-- **Base branch** — `main`, `develop`, something else? → `--base`
+- **Base branch** — `main`, `develop`, something else? → `--base`, but only when the
+  project really branches off something else: an empty answer records nothing and
+  follows `default_base_branch` from `config.json`, then `develop`
 - **Pre-migrated dump** — worth it when replaying the migration history is slow.
   → `--dump`, plus `--db-service` / `--db-user` if they differ from `db` / `postgres`
 - **Migration path** — the service and the commands that must run before the dump is
   taken → `--app-service`, `--deps`, `--migrate`
+- **Where the migration files live** — only asked because the default pathspec
+  matches Django, Prisma and MikroORM and nothing else: a Rails (`db/migrate/*`) or
+  Flyway layout needs `--migrations-path`, or no commit ever touches the pathspec and
+  the dump reads as up to date forever
 - **Database wiring** — how does the app learn which database to hit? `{{database}}`
   is replaced by the throwaway database's name → `--env KEY=VALUE`, repeatable. This
   is the setting that most often makes a refresh useless, so read the app's own
@@ -286,8 +375,11 @@ Two things to read in that output rather than discover later:
   → `--git-container`, otherwise leave it off, it creates nothing
 - **Seed of a fresh worktree** — the command that makes a restored database usable
   (`manage.py seed_data`, a dev-users command…), played in the application service
-  once the database answers → `--post-create`. Ask for the seed steps only: a script
-  that resets the database undoes the restore
+  once the database answers and that service reports itself healthy → `--post-create`.
+  Ask for the seed steps only: a script that resets the database undoes the restore
+- **How slowly the stack boots** — only for a project whose services install their
+  dependencies at startup and outlast the built-in bounds (a minute for the database,
+  ten for the application) → `--ready-timeout`, `--ready-interval`
 
 ### 4. Present the command, do not run it
 
@@ -304,8 +396,10 @@ Hand over the full command: the interview is done, and a command the user can re
 beats a walk they have to answer. Mention that `wtm project create my-app` alone
 would ask the same things one question at a time (services read from the compose
 file, current values as defaults), which is the way out when the interview left
-something unsettled. Both are theirs to run: the walk waits on their answers, so
-never start it yourself.
+something unsettled. `--no-input` is the opposite end: a missing value becomes an
+error instead of a question, which is what keeps a scripted registration from
+hanging on a prompt nobody reads. Both are theirs to run: the walk waits on their
+answers, so never start it yourself.
 
 Explain what it writes, then wait. Once the user has run it, the follow-up is
 `wtm backup refresh my-app` (starts the stack if needed) and `wtm doctor` to confirm
