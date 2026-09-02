@@ -1,7 +1,7 @@
 {
   "name": "hy0sh-skills",
   "description": "Skills personnels : review-pr (review structurée de PR GitHub), wtm (worktree git avec stack Docker isolée, via worktree-manager) et dailysum (portion personnelle du daily sum collaboratif)",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "author": {
     "name": "François Bouyer",
     "email": "francois.bouyer@thetribe.io"

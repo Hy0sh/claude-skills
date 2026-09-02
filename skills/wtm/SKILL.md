@@ -7,9 +7,10 @@ description: >
   Compose stack (remapped ports, separate volumes) and a pre-migrated database dump
   restored in seconds (Postgres, MySQL, MariaDB, MongoDB or SQLite), so parallel
   agents never collide with the main stack or with each other. Covers the worktree
-  lifecycle, reaching into the stack, and the
-  isolation/runtime-proof disciplines. Invoked as `/wtm setup`, it instead guides
-  registering a project in the `wtm` registry, or changing one already there.
+  lifecycle, adopting a worktree another tool cut (`claude --worktree`, `git worktree
+  add`), reaching into the stack, and the isolation/runtime-proof disciplines.
+  Invoked as `/wtm setup`, it instead guides registering a project in the `wtm`
+  registry, or changing one already there.
 argument-hint: [setup]
 ---
 
@@ -43,13 +44,17 @@ Read-only commands (`wtm --version`, `wtm doctor`, `wtm list`, `wtm backup list`
   the main one) and the project is registered in `wtm`.
 - You are already inside a worktree created by `wtm` and need to run, test or observe
   the stack.
+- You are inside a worktree another tool cut (`claude --worktree` under
+  `.claude/worktrees`, a plain `git worktree add`) and the task needs a stack of its
+  own: `wtm adopt` gives it one where it stands.
 - You need runtime proof (screenshot, API response) coming from the worktree's own
   code, not from the shared stack.
 
-Being in *a* worktree is not enough: wtm only owns the ones it created, under
-`<repo>/.worktrees/<branch>`. A worktree cut by another tool (`claude -w`, under
-`.claude/worktrees`) has no index, no provisioned `.env` and no stack, does not show
-up in `wtm list`, and none of the commands below can do anything for it.
+Being in *a* worktree is not the same as being in one wtm knows. Until it is adopted,
+a worktree another tool cut has no index, no provisioned `.env`, no stack, and `wtm
+list` does not show it. Since **0.10.0** that is a state to leave rather than a dead
+end: `wtm adopt` from inside it, and every command below works on it afterwards. On an
+older binary it really is a dead end, and the upgrade is the user's to run.
 
 ## Before anything
 
@@ -85,6 +90,14 @@ running. What the sections below describe then arrived version by version:
 - **0.8.0** — `--no-post-create`, `stop --all`, `remove --all`.
 - **0.9.0** — `create --run` and `--exec`, and the memory question a create asks when
   it runs on a terminal, with `--ignore-memory` to answer it in advance.
+- **0.10.0** — `wtm adopt`, `create --from-here`, and the three `doctor` reports this
+  skill leans on for a machine that has drifted: two worktrees of one project fighting
+  over a port, recorded indices no worktree stands behind, anonymous volumes nothing
+  mounts. A refresh now also stops the database it started for itself, an index whose
+  ports clash with a recorded worktree is skipped instead of failing at `docker
+  compose up`, and on a native docker the dump is at last readable by the container
+  that restores it: before, every worktree on Linux came up on an empty database
+  without a word.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -96,7 +109,8 @@ If the project is not registered, switch to Setup mode rather than improvising.
 Every worktree command accepts `[project] <branch>`. A first argument that names a
 registered project is the project; otherwise everything is a branch of the current
 directory's project. So `wtm start feat/x` from inside the repo, `wtm start my-app
-feat/x` from anywhere.
+feat/x` from anywhere. `adopt` is the one whose branch is optional: with none it takes
+the worktree of the current directory.
 
 ## Lifecycle
 
@@ -109,6 +123,11 @@ wtm create feat/my-branch --no-post-create        # stack up, seed skipped
 wtm create feat/my-branch --ignore-memory         # never ask, however tight the RAM
 wtm create feat/my-branch --exec 'npm run seed'   # a shell line in the app container
 wtm create feat/my-branch --run 'pnpm install'    # a shell line on the host, once ready
+wtm create feat/my-branch --from-here    # base = the branch of the current directory
+
+wtm adopt                                # this worktree, wherever another tool cut it
+wtm adopt --as feat/my-branch            # renaming the branch on the way in
+wtm adopt my-app worktree-curry -y       # named from anywhere, nothing asked
 
 wtm list                                 # INDEX / BRANCH / STATUS / PATH
 wtm start feat/my-branch                 # bring a stopped stack back up
@@ -124,11 +143,26 @@ locked or dirty ones are reported together at the end, with a non-zero exit. It 
 takes the whole project, other people's worktrees included, which the isolation
 discipline below rules out unless you created them all.
 
+`remove` on an adopted worktree stops at the stack: it takes the containers, volumes
+and built images down, takes wtm's own files back out of the checkout, releases the
+index, and leaves the directory exactly where it found it. wtm removes what it built,
+never a checkout it did not create, so whatever cut that worktree stays the one that
+disposes of it.
+
 A `remove` that finds modified tracked files, or a worktree git has locked, refuses
 and leaves everything as it was, stack included, so the message is not a half-done
-removal. It happens for real on projects whose dev server regenerates a tracked file
-(TanStack Router's `routeTree.gen.ts`, generated clients): read the listed paths
+removal. An adopted worktree is spared that check, since nothing of it is deleted and
+one being worked in always holds uncommitted work. It happens for real on projects
+whose dev server regenerates a tracked file (TanStack Router's `routeTree.gen.ts`,
+generated clients): read the listed paths
 before reaching for `--force`, since the flag discards those changes.
+
+The base is resolved in the main repository, never in the worktree the command was
+typed from, so from a worktree on `feat/a` a create starts from the project's base and
+not from `feat/a`. `--from-here` is for the other intent: it resolves the branch of
+the current directory and cuts from it. A create also says when the local base it cuts
+from trails its remote (`develop is 12 commits behind origin/develop`) and does not
+move the cut: unpushed commits on that base would silently be left out.
 
 An existing branch is reused, and the base argument is then ignored. A local branch
 is checked out as-is; a branch that only exists on a remote is checked out tracking
@@ -150,6 +184,28 @@ comes on a terminal, so an agent under one can hang on it: pass `--ignore-memory
 nobody is there to answer. Answering no leaves the worktree without its stack, which
 is what `--no-start` produces, and `wtm start` brings it up later without replaying
 the seed.
+
+**Adopting the worktree you are already in.** `wtm adopt` with no argument takes the
+worktree of the current directory and gives it what a created one gets: a stable
+index, remapped ports, the provisioned `.env` files and compose overrides, the
+restored dump and its stack. It stays where it is, which is the point: something is
+usually working in that directory, an agent included, and moving it to satisfy a
+naming convention would pull the ground from under it. `--as <branch>` renames the
+branch on the way in, which is worth it for a `claude --worktree` name nobody chose:
+that name is the handle of every later command, and adopting is the only moment the
+rename is free, since the branch is part of the compose project name. Adopting asks
+before writing into a directory wtm did not create; `-y` answers for a script or an
+agent, and without a terminal the command refuses rather than writing unasked. A
+worktree on a detached HEAD cannot be adopted: wtm keys a worktree by its branch.
+
+**One worktree, one branch.** wtm keys a worktree by the branch git reports for it,
+so switching branches inside one (a `gh pr checkout`, a `git switch`) breaks the pair.
+An adopted worktree disappears outright: `wtm list` stops showing it, its recorded
+index becomes one `doctor` reports as standing behind nothing, and its stack keeps
+running under the old compose project name. A worktree wtm created stays listed but
+under the new branch with no index, and `wtm stop <original-branch>` answers `no
+worktree for branch`. Reviewing several branches means one worktree each,
+`wtm create <branch>` per branch, never a switch inside one.
 
 ## Working inside a worktree
 
@@ -223,8 +279,9 @@ and a `.worktrees` directory in the main checkout. Since 0.3.0 they are recorded
 the repository's `.git/info/exclude`, so `git status` stays clean and `git add -A` is
 safe. Never add them to the project's `.gitignore`, which is versioned and belongs to
 the project, and never delete them to "clean up" a worktree: they are what its stack
-mounts. On an older wtm they show up as untracked, so stage explicit paths rather than
-everything.
+mounts. On an adopted worktree `wtm remove` takes them back out itself, the port block
+in `.env` included, so the checkout is left as it was found. On an older wtm they show
+up as untracked, so stage explicit paths rather than everything.
 
 ## Discipline §3 — isolation (workflow-rules)
 
@@ -243,7 +300,9 @@ different things and must stay that way.
   database, to make your own task pass.
 - **Clean up your footprint** at the end of a task: `wtm stop <branch>` when you may
   come back to it, `wtm remove <branch>` when the work is done. Never stop or remove a
-  worktree you did not create.
+  worktree you did not create. Adopting is the one thing you may do to a worktree you
+  did not cut, and only the one you are working in: it adds a stack and takes nothing
+  away, and its `remove` leaves the checkout to whatever created it.
 - The dump lives in `~/.config/wtm/backups/` and is shared through a `.db-snapshot`
   symlink, except for a file-based engine (SQLite): there the dump is copied into the
   worktree at the project's `db_path`, and only when nothing is there yet, so a
@@ -268,8 +327,10 @@ observe through the main stack's ports, they serve the other code.
 
 - `wtm doctor` reports the running version and whether a newer one is published,
   Docker VM memory against measured per-stack usage, the size of the build cache, each
-  project's stride, offset and engine, the ports two projects would both publish, and
-  what removed worktrees left behind: their volumes and the images their stacks built.
+  project's stride, offset and engine, the ports two projects would both publish, the
+  ports two worktrees of one project would both publish, the recorded indices no
+  worktree stands behind, the anonymous volumes nothing mounts, and what removed
+  worktrees left behind: their volumes and the images their stacks built.
   Those volumes matter beyond disk: the index allocator steps over any index docker
   still holds volumes for, so a new worktree lands further out with higher ports.
   `doctor` prints the `docker volume rm` and `docker rmi` lines that drop them, which
@@ -279,6 +340,17 @@ observe through the main stack's ports, they serve the other code.
 - A port clash between two projects is not something wtm can fix for you: offsets are
   handed out once, at registration. Either the two stacks do not run together, or
   `port_offset` changes in `config.json` and that project's worktrees are recreated.
+  Between two worktrees of one project it is handled: since 0.10.0 the allocator skips
+  an index whose ports a recorded worktree already publishes and says so (`index 2
+  skipped: db would publish 26434, which feat/a already publishes for db_test`), which
+  happens whenever two services sit closer together than the stride, `db` on 5432 and
+  `db_test` on 5433 being the common shape. Worktrees recorded before that can still
+  overlap, and `doctor` names them with the `portStride` remedy.
+- An index recorded for a branch with no worktree pushes every new worktree one
+  further out, and makes a foreign worktree on that branch read as adopted. They come
+  from removals made outside `wtm remove`; `doctor` lists them with the `wtm remove
+  <project> <branch>` that releases each, which also takes down whatever stack was
+  left at that index.
 - A stale dump is never a blocker: `create` says how far behind it is, and the app
   migrates on top of it. `wtm backup refresh <project>` saves the replay. A dump
   reported as up to date forever means `migrations_path` does not match the project's
@@ -402,9 +474,9 @@ hanging on a prompt nobody reads. Both are theirs to run: the walk waits on thei
 answers, so never start it yourself.
 
 Explain what it writes, then wait. Once the user has run it, the follow-up is
-`wtm backup refresh my-app` (starts the stack if needed) and `wtm doctor` to confirm
-the stride and offset. Both are theirs to launch too, `refresh` being long and
-stack-mutating.
+`wtm backup refresh my-app` (starts the database if it is down, and puts it back
+where it found it afterwards) and `wtm doctor` to confirm the stride and offset. Both
+are theirs to launch too, `refresh` being long and stack-mutating.
 
 Only pass the flags the interview actually justified. A project without a dump needs
 none of the backup flags.
