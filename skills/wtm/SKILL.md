@@ -98,6 +98,12 @@ running. What the sections below describe then arrived version by version:
   compose up`, and on a native docker the dump is at last readable by the container
   that restores it: before, every worktree on Linux came up on an empty database
   without a word.
+- **0.11.0** — `wtm clean`, which drops in one go what `doctor` reports as left
+  behind: the recorded indices, and the volumes and images of worktrees that no
+  longer exist. The hooks below lean on it.
+- **0.12.0** — a `create` that releases those indices itself before allocating its
+  own, so a worktree gone outside wtm stops pushing the next one onto ports its
+  neighbours never used.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
