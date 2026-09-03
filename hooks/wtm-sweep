@@ -1,0 +1,20 @@
+#!/bin/sh
+# Releases what a worktree that left outside wtm keeps holding: its recorded
+# index, and the stack, volumes and images that index still names. Bound to
+# WorktreeRemove, which only fires for the worktrees this harness cut itself,
+# and again to SessionEnd for every other way one disappears.
+set -u
+
+command -v wtm >/dev/null 2>&1 || exit 0
+# Every finding wtm would clean is read from docker, so a stopped engine has
+# nothing to say and the sweep is not worth starting one for.
+docker info >/dev/null 2>&1 || exit 0
+
+if ! out=$(wtm clean -y 2>&1); then
+	printf '{"systemMessage":"wtm clean did not finish: run it by hand to see why"}\n'
+	exit 0
+fi
+case "$out" in
+*"nothing to clean"*) exit 0 ;;
+esac
+printf '{"systemMessage":"wtm clean: what a removed worktree left behind was released"}\n'

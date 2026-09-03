@@ -98,6 +98,12 @@ running. What the sections below describe then arrived version by version:
   compose up`, and on a native docker the dump is at last readable by the container
   that restores it: before, every worktree on Linux came up on an empty database
   without a word.
+- **0.11.0** — `wtm clean`, which drops in one go what `doctor` reports as left
+  behind: the recorded indices, and the volumes and images of worktrees that no
+  longer exist. The hooks below lean on it.
+- **0.12.0** — a `create` that releases those indices itself before allocating its
+  own, so a worktree gone outside wtm stops pushing the next one onto ports its
+  neighbours never used.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -206,6 +212,24 @@ running under the old compose project name. A worktree wtm created stays listed 
 under the new branch with no index, and `wtm stop <original-branch>` answers `no
 worktree for branch`. Reviewing several branches means one worktree each,
 `wtm create <branch>` per branch, never a switch inside one.
+
+## The hooks this plugin installs
+
+Three lifecycle hooks ship with the skill, so what follows does not rest on anyone
+remembering it.
+
+- `SessionStart` speaks up when the session opens in a worktree wtm does not know:
+  no recorded index, no isolated ports, no stack of its own. Tell the user and offer
+  `wtm adopt`, which is free until something is built on it.
+- `WorktreeRemove` and `SessionEnd` both run `wtm clean -y`. It releases the indices
+  no worktree stands behind and drops the volumes and images their stacks left, which
+  is what a worktree removed by another tool keeps holding. Needs **wtm >= 0.11.0**
+  and a docker that answers; without either it exits without a word, as it does when
+  there is nothing to clean.
+
+Neither hook can reach a live worktree: everything they touch is keyed on a branch
+git no longer has a checkout for. They are not a replacement for `wtm remove` at the
+end of your task, only the net under the worktrees that leave another way.
 
 ## Working inside a worktree
 

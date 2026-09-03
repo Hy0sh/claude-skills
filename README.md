@@ -10,6 +10,11 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | `wtm` | Usage de [worktree-manager](https://github.com/Hy0sh/worktree-manager) : worktree git avec sa stack Docker isolée, plus les disciplines d'isolation et de preuve runtime |
 | `dailysum` | Portion personnelle du daily sum collaboratif (commits du jour, enrichissement PR/Jira) à coller dans Slack |
 
+Le plugin installe aussi trois hooks : un rappel d'adoption à l'ouverture d'une
+session dans un worktree que `wtm` ne connaît pas, et un `wtm clean -y` à la
+suppression d'un worktree comme en fin de session. Ils sortent sans rien faire si
+`wtm` ou docker manquent.
+
 ## Installation
 
 ```bash
@@ -35,6 +40,10 @@ claude-skills/
 ├── .claude-plugin/
 │   ├── marketplace.json   # déclare le marketplace + le plugin hy0sh-skills
 │   └── plugin.json        # métadonnées du plugin
+├── hooks/
+│   ├── hooks.json         # SessionStart, WorktreeRemove et SessionEnd
+│   ├── wtm-adopt-hint     # signale un worktree que wtm ne connaît pas
+│   └── wtm-sweep          # `wtm clean -y` quand un worktree disparaît
 └── skills/
     ├── review-pr/
     │   └── SKILL.md
