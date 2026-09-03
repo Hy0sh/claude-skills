@@ -207,6 +207,24 @@ under the new branch with no index, and `wtm stop <original-branch>` answers `no
 worktree for branch`. Reviewing several branches means one worktree each,
 `wtm create <branch>` per branch, never a switch inside one.
 
+## The hooks this plugin installs
+
+Three lifecycle hooks ship with the skill, so what follows does not rest on anyone
+remembering it.
+
+- `SessionStart` speaks up when the session opens in a worktree wtm does not know:
+  no recorded index, no isolated ports, no stack of its own. Tell the user and offer
+  `wtm adopt`, which is free until something is built on it.
+- `WorktreeRemove` and `SessionEnd` both run `wtm clean -y`. It releases the indices
+  no worktree stands behind and drops the volumes and images their stacks left, which
+  is what a worktree removed by another tool keeps holding. Needs **wtm >= 0.11.0**
+  and a docker that answers; without either it exits without a word, as it does when
+  there is nothing to clean.
+
+Neither hook can reach a live worktree: everything they touch is keyed on a branch
+git no longer has a checkout for. They are not a replacement for `wtm remove` at the
+end of your task, only the net under the worktrees that leave another way.
+
 ## Working inside a worktree
 
 `exec` and `run` are deliberately distinct.

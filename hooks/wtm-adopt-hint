@@ -1,0 +1,24 @@
+#!/bin/sh
+# A worktree another tool cut is invisible to wtm until it is adopted: no index,
+# no isolated ports, no stack of its own. Opening a session in one is the moment
+# to say so, while the rename adopting offers is still free.
+set -u
+
+command -v wtm >/dev/null 2>&1 || exit 0
+here=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+common=$(git rev-parse --git-common-dir 2>/dev/null) || exit 0
+# The main repository answers a relative ".git"; only a linked worktree is given
+# the absolute path of the git directory it borrows.
+case "$common" in
+/*) ;;
+*) exit 0 ;;
+esac
+
+# A non-zero list is a directory of no registered project, which is not a
+# worktree wtm was ever meant to know.
+list=$(wtm list 2>/dev/null) || exit 0
+case "$list" in
+*"$here"*) exit 0 ;;
+esac
+
+printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"This worktree is not adopted by wtm: it has no recorded index, no isolated ports and no stack of its own. Run `wtm adopt` from here before starting anything, and mention it to the user."}}'
