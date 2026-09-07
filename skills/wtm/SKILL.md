@@ -215,17 +215,19 @@ worktree for branch`. Reviewing several branches means one worktree each,
 
 ## The hooks this plugin installs
 
-Three lifecycle hooks ship with the skill, so what follows does not rest on anyone
+Two lifecycle hooks ship with the skill, so what follows does not rest on anyone
 remembering it.
 
 - `SessionStart` speaks up when the session opens in a worktree wtm does not know:
   no recorded index, no isolated ports, no stack of its own. Tell the user and offer
   `wtm adopt`, which is free until something is built on it.
-- `WorktreeRemove` and `SessionEnd` both run `wtm clean -y`. It releases the indices
+- `SessionEnd` runs `wtm clean -y`, detached from the hook, since Claude Code gives a
+  plugin's SessionEnd hooks 1.5 seconds before killing them. It releases the indices
   no worktree stands behind and drops the volumes and images their stacks left, which
   is what a worktree removed by another tool keeps holding. Needs **wtm >= 0.11.0**
   and a docker that answers; without either it exits without a word, as it does when
-  there is nothing to clean.
+  there is nothing to clean. `WorktreeRemove` would be the natural place, but it only
+  fires for worktrees a `WorktreeCreate` hook made, never for git's own.
 
 Neither hook can reach a live worktree: everything they touch is keyed on a branch
 git no longer has a checkout for. They are not a replacement for `wtm remove` at the
