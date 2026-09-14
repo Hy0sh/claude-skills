@@ -4,7 +4,7 @@ description: Review a GitHub pull request and provide structured, actionable fee
 argument-hint: [pr-number]
 ---
 
-The review itself is read-only — produce it without any write or mutation action. The **only** mutation this skill may perform is posting the drafted inline comments (see the dedicated section below), and **only** after the user explicitly says to. Never approve, never request changes, never post a GitHub review verdict.
+This skill is **read-only end to end**. It writes nothing to GitHub: not a comment, not a reply, not a review verdict, not an approval. It produces the structured review and ready-to-post drafts, and the reviewer posts by hand — see the dedicated section for why that is a team rule and not a limitation. The only writes it may perform are local and to its own workspace: the worktree and stack it sets up to observe behaviour, and the scratchpad files it writes for itself.
 
 All outputs MUST be written in French.
 
@@ -137,10 +137,10 @@ Then provide a structured review:
 
 ## 📍 Inline Comments
 For each issue:
-- File path
+- File path and the line the comment anchors to
 - Code snippet
 - Explanation
-- Suggested fix
+- A suggested fix **only** when it carries a choice the author could not guess (see the drafting cap below — a trivial fix is left to the author)
 
 ## ✅ Positives
 - What is well done
@@ -163,41 +163,35 @@ for pr in $(gh search prs --repo "$repo" --commenter "$me" --limit 30 --json num
 done | head -40
 ```
 
-If no samples come back, fall back to a concise, collaborative-colleague tone. Otherwise reproduce whatever you observe: tutoiement vs vouvoiement, `stp`/`svp`, light emojis (`:)` `🙏` `😅`), `→` for the concrete consequence, `file:line` in backticks, a one-line concrete fix (ideally pointing at a twin pattern already in the repo), and a soft closing question. Keep each comment short — problem → consequence → suggested fix, no preamble.
+If no samples come back, fall back to a concise, collaborative-colleague tone. Otherwise reproduce whatever you observe: tutoiement vs vouvoiement, `→` for the concrete consequence, `file:line` in backticks.
 
-**Anchoring rule (matters for posting).** An inline comment must attach to a line **present in the PR diff**. If the line you want to flag is *not* in the diff (e.g. an unchanged call site that should have been touched), anchor on the nearest added/changed line in the same hunk that is thematically related, and reference the true line number in the comment text. Compute the final-file line number from the diff hunk header (`@@ -a,b +c,d @@`).
+**Then apply this cap on top of the sampled voice — it overrides anything the samples suggest:**
 
-Present the drafts to the user for review **before** posting anything.
+- **Two to three sentences, 110 to 500 characters.** Structure is problem → consequence (`→`), no preamble. End on the technical fact.
+- **No closing question, no trailing `stp`.** Interrogative endings were removed by hand on 2026-07-13 and again on 2026-08-17; do not reintroduce them.
+- **Do not hand over the solution when it is trivial.** A `&&` to flip to `||`, a key to rename, an argument to add: name the defect and its consequence, the author concludes. Writing the fix is condescending and pads the thread. A fix sentence survives only when it carries a choice the author could not guess — the kind of "À déplacer dans `bookings.vehicles.index.tsx`" that names a destination.
+- **Runtime evidence does not go in the comment.** Screenshots, console traces and repro scenarios stay in the conversation: they exist to settle severity with the reviewer, not to fill the thread. On PR #1277, nine "Vérifié en local : …" paragraphs were deleted by hand from nine posted threads.
+- **Zero to one emoji**, ideally none. Never `😅🙏` in series.
 
-## 📮 Posting the comments inline (only on explicit go-ahead)
+**Anchoring rule (matters when the reviewer posts).** An inline comment must attach to a line **present in the PR diff**. If the line you want to flag is *not* in the diff (e.g. an unchanged call site that should have been touched), anchor on the nearest added/changed line in the same hunk that is thematically related, and reference the true line number in the comment text. Compute the final-file line number from the diff hunk header (`@@ -a,b +c,d @@`).
 
-Posting is the only mutation this skill allows, and only after the user explicitly approves (e.g. "post them", "commente", "vas-y"). Until then, the comments stay as proposals in your response.
+## 📮 The drafts are the end of the line — this skill never posts
 
-When approved, post each one as an inline review comment on the PR head. Use the verified head SHA (`git rev-parse origin/<headRefName>`). Comment bodies hold backticks, newlines and quotes, so write each one to a file first and let `gh` read it — `-F key=@file` loads the file, `-f` never does (it would post the literal `@/path/to/file`):
+**This skill performs no mutation at all.** It produces the structured review and the drafts, and stops there. The reviewer reads them, rewrites them in their own words, and posts them by hand.
 
-```bash
-# body written beforehand to <file>.md (scratchpad), never inlined in the command
-gh api "repos/<owner>/<repo>/pulls/<pr>/comments" --method POST \
-  -f commit_id="<head-sha>" \
-  -f path="<path>" \
-  -F line=<final-file-line> \
-  -f side="RIGHT" \
-  -F body=@<file>.md \
-  --jq '.html_url'
-```
+The reason is a team rule, not a technical limit. Since 2026-08-27 the gallia-utopia team runs an experiment that **bans AI-generated review comments**: using an LLM to help read a diff stays fine, but the reviewer must do their own pass and rewrite anything generated before it reaches the PR. A comment posted from here lands under the reviewer's account, so it falls squarely under that ban.
 
-Read back the `body` of the created comment (or open the returned `html_url`) before reporting it as posted: a body that is a single line starting with `@` means the file was not expanded and the comment has to be deleted (`gh api -X DELETE "repos/<owner>/<repo>/pulls/comments/<id>"`) and posted again.
+**The ban covers replies too**, extended on 2026-09-09: three replies posted on PR #1488 through `gh api .../comments/<id>/replies` had to be taken down. When a review comes in, analyse it, verify it, measure if needed, then list the response material in conversation — the point raised, what is true or false in it, the numbers, what was fixed — and let the reviewer write and post.
 
-Report the resulting `html_url` for each posted comment in a short table. If the user only wants some of them posted, post that subset.
+So: present the drafts, say which file and which line each one anchors to, and stop. Do not offer to post them, and do not propose the `gh api` command that would.
 
 ## 🚫 Important constraints
+- DO NOT write anything to GitHub: no inline comment, no reply in a review thread, no `gh pr comment`, no `gh api .../comments` POST. The drafts are handed to the reviewer, who posts them.
 - DO NOT approve the PR
 - DO NOT request changes via GitHub (no `gh pr review`)
-- DO NOT use `gh pr comment` (top-level conversation comment) — comments go inline via the `pulls/<pr>/comments` API only
-- DO NOT simulate a GitHub review action
-- DO NOT post anything before the user has seen the drafts AND explicitly approved posting
+- DO NOT simulate a GitHub review action, and DO NOT report a comment as posted
 - DO NOT run the test suite, the linters, the formatters or the build — read `gh pr checks`
-- DO NOT start, stop or reconfigure a stack, and DO NOT create, seed or migrate a database
+- DO NOT start, stop or reconfigure a shared stack, and DO NOT create, seed or migrate a shared database
 - The review text itself is output as plain text in this response
 
-After the review (and any posting), clean up the setup you created. On route A, offer `wtm remove <headRefName>` (or `wtm stop <headRefName>` if the user may come back to it) — there is no branch to restore, the user's worktree was never touched. On route B, offer to switch back to the branch the user was on before the checkout.
+After the review, clean up the setup you created. On route A, offer `wtm remove <headRefName>` (or `wtm stop <headRefName>` if the user may come back to it) — there is no branch to restore, the user's worktree was never touched. On route B, offer to switch back to the branch the user was on before the checkout.
