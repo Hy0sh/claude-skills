@@ -1,0 +1,56 @@
+#!/bin/bash
+# A worktree has its own stack on remapped ports. A `docker compose` command with no
+# project name resolves to the directory's default project, which is the MAIN checkout's
+# stack — so the command lands on the wrong containers, serving the wrong tree, and the
+# result reads as green. Asking here costs one keystroke; discovering it after a review
+# costs the review.
+#
+# Asks rather than denies on purpose: `docker compose -p <project>` is the documented way
+# out when a branch is created inside an adopted worktree and `wtm exec`, which resolves by
+# checked-out branch, no longer finds it. A hard refusal would close that door.
+set -u
+
+payload=$(cat)
+cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null)
+[ -z "$cmd" ] && exit 0
+
+# Only linked worktrees. The main repository answers a relative ".git"; a linked worktree is
+# given the absolute path of the git directory it borrows. Same test as wtm-adopt-hint.
+common=$(git rev-parse --git-common-dir 2>/dev/null) || exit 0
+case "$common" in
+  /*) ;;
+  *) exit 0 ;;
+esac
+
+ask() {
+  jq -nc --arg r "$1" \
+    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:$r}}'
+  exit 0
+}
+
+# First word of each command segment, leading env assignments stripped.
+while IFS= read -r seg; do
+  read -r first rest <<< "$seg"
+  while [[ -n "$first" && "$first" == *=* && "$first" != */* ]]; do
+    seg=${seg#*"$first"}
+    read -r first rest <<< "$seg"
+  done
+
+  # Anything routed through wtm is already correct, including `wtm run -- docker compose …`.
+  [ "${first##*/}" = "wtm" ] && continue
+  [ "${first##*/}" = "docker" ] || continue
+
+  read -r sub _ <<< "$rest"
+  case "$sub" in
+    compose)
+      # An explicit project name pins the stack, which is the sanctioned escape hatch.
+      case " $rest " in
+        *" -p "*|*" --project-name "*|*" --project-name="*) continue ;;
+      esac
+      ask "Worktree : \`docker compose\` sans \`-p\` vise la stack du checkout principal, pas celle de ce worktree. Le résultat porterait sur le mauvais code. Utiliser \`wtm exec <branche> -- …\`, ou \`docker compose -p <projet-du-worktree> …\` si \`wtm exec\` ne résout plus la branche." ;;
+    exec|run)
+      ask "Worktree : \`docker $sub\` cible un conteneur nommé à la main, sans garantie qu'il serve le code de ce worktree. Passer par \`wtm exec <branche> -- …\`." ;;
+  esac
+done < <(printf '%s\n' "$cmd" | tr ';|&\n' '\n\n\n\n')
+
+exit 0
