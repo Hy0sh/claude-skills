@@ -55,6 +55,27 @@ The user's own worktree is never touched on this route, so there is no branch to
 
 On either route: only then start reading files. Every claim about file content must come from the PR branch, not from the diff or the base branch.
 
+## ♻️ Is this a first pass or a re-review?
+
+Most PRs get reviewed more than once: the author pushes fixes, the branch is rebased, and the reviewer comes back. A second pass that re-reads the whole diff from `origin/<base>` re-derives everything already settled, and re-raises findings the author has since fixed. Decide which pass you are on **before** reading any file — the answer changes both the diff range and the setup.
+
+Detect it with one read-only call, after the setup has told you the repo and PR number:
+
+```bash
+gh api "repos/<owner>/<repo>/pulls/<pr>/comments" \
+  --jq '.[] | select(.user.login=="<reviewer-login>") | {path, line, sha: .original_commit_id, body: .body[0:80]}'
+```
+
+No comments from the reviewer: **first pass**, proceed normally.
+
+Comments already there: **re-review**. Three things change.
+
+1. **Narrow the diff range.** Take the most recent `original_commit_id` among those comments — that is the head that was last reviewed. Read `git diff <last-reviewed-sha>...HEAD` instead of `git diff origin/<baseRefName>...HEAD`. If that SHA is no longer reachable (the branch was rebased or force-pushed since), say so and fall back to the full range rather than guessing.
+2. **Account for the standing findings first.** For each existing comment, state whether it is **traité**, **partiellement traité** or **non traité**, with the line of code that settles it. This comes before any new finding: the reviewer's first question on a second pass is always what happened to the previous round.
+3. **Reuse the environment.** If `wtm list` already knows `<headRefName>`, `wtm start` plus the resync from route A is enough — do not `wtm create` a second stack. Building nine containers again for a three-file follow-up is the single most expensive mistake this skill can make.
+
+The severity gate, the runtime-proof requirement and the drafting rules apply unchanged to whatever new findings the narrowed range turns up.
+
 ## 🔄 Re-verify before producing the final review
 
 PRs can be force-pushed **during** your review. Just before you write the structured review:
