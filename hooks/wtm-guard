@@ -8,19 +8,15 @@
 # Asks rather than denies on purpose: `docker compose -p <project>` is the documented way
 # out when a branch is created inside an adopted worktree and `wtm exec`, which resolves by
 # checked-out branch, no longer finds it. A hard refusal would close that door.
+#
+# The directory that matters is the one the command reaches, not the one the session sits
+# in: `cd <worktree> && docker compose …` typed from the main checkout is the same mistake.
+# So the segments are walked in order, carrying the directory each `cd` moves to.
 set -u
 
 payload=$(cat)
 cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -z "$cmd" ] && exit 0
-
-# Only linked worktrees. The main repository answers a relative ".git"; a linked worktree is
-# given the absolute path of the git directory it borrows. Same test as wtm-adopt-hint.
-common=$(git rev-parse --git-common-dir 2>/dev/null) || exit 0
-case "$common" in
-  /*) ;;
-  *) exit 0 ;;
-esac
 
 ask() {
   jq -nc --arg r "$1" \
@@ -28,17 +24,46 @@ ask() {
   exit 0
 }
 
-# First word of each command segment, leading env assignments stripped.
+# The main repository answers a relative ".git"; only a linked worktree is given the
+# absolute path of the git directory it borrows.
+is_worktree() {
+  local common
+  common=$(git -C "$1" rev-parse --git-common-dir 2>/dev/null) || return 1
+  case "$common" in /*) return 0 ;; *) return 1 ;; esac
+}
+
+curdir=$PWD
+# Set when a `cd` target cannot be resolved without running it — `cd $(wtm path …)` being
+# the exact case this guard exists for. From there the directory is unknown, and unknown
+# is treated as "possibly a worktree" rather than waved through.
+opaque_cd=0
+
 while IFS= read -r seg; do
   read -r first rest <<< "$seg"
   while [[ -n "$first" && "$first" == *=* && "$first" != */* ]]; do
     seg=${seg#*"$first"}
     read -r first rest <<< "$seg"
   done
+  [ -z "$first" ] && continue
+
+  if [ "${first##*/}" = "cd" ]; then
+    read -r target _ <<< "$rest"
+    target=${target%\"}; target=${target#\"}
+    target=${target%\'}; target=${target#\'}
+    case "$target" in
+      ''|-*)   ;;                                   # `cd` bare or `cd -`: leave curdir as is
+      *'$'*|*'`'*) opaque_cd=1 ;;                   # needs execution to know: stay cautious
+      *) resolved=$(cd "$curdir" 2>/dev/null && cd "${target/#\~/$HOME}" 2>/dev/null && pwd)
+         if [ -n "$resolved" ]; then curdir=$resolved; opaque_cd=0; else opaque_cd=1; fi ;;
+    esac
+    continue
+  fi
 
   # Anything routed through wtm is already correct, including `wtm run -- docker compose …`.
   [ "${first##*/}" = "wtm" ] && continue
   [ "${first##*/}" = "docker" ] || continue
+
+  if [ "$opaque_cd" -eq 0 ] && ! is_worktree "$curdir"; then continue; fi
 
   read -r sub _ <<< "$rest"
   case "$sub" in
