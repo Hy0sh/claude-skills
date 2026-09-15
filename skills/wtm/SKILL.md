@@ -244,11 +244,19 @@ wtm exec feat/my-branch -- bash
 wtm exec feat/my-branch --service db -- psql -U postgres
 
 # on the host, with the worktree as working directory, COMPOSE_PROJECT_NAME and
-# COMPOSE_FILE pointing at this worktree's stack
+# COMPOSE_FILE pointing at this worktree's stack — for a worktree you are not in
 wtm run feat/my-branch -- git status
 wtm run feat/my-branch -- scripts/some-compose-script.sh
 cd $(wtm path feat/my-branch)
 ```
+
+From inside the worktree itself — where an adopted `claude --worktree` session already
+is — run git bare: `git fetch`, `git pull`, `git merge`. The working directory is the
+worktree, and only `COMPOSE_PROJECT_NAME` and `COMPOSE_FILE` justify the `wtm run`
+detour, which git has no use for. A session Claude Code isolated in that worktree has
+no choice: wtm keys a worktree by its branch, so `wtm run <branch> -- git …` hides the
+target directory behind an indirection the isolation guard cannot read, and it refuses
+the command rather than let a git operation it cannot place run.
 
 `wtm create --run` and `--exec` reach those same two destinations from the create
 itself: `--exec` plays a shell line in the application container, after the project's
