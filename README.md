@@ -10,12 +10,14 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | `wtm` | Usage de [worktree-manager](https://github.com/Hy0sh/worktree-manager) : worktree git avec sa stack Docker isolée, plus les disciplines d'isolation et de preuve runtime |
 | `dailysum` | Portion personnelle du daily sum collaboratif (commits du jour, enrichissement PR/Jira) à coller dans Slack |
 
-Le plugin installe aussi trois hooks : un rappel d'adoption à l'ouverture d'une
-session dans un worktree que `wtm` ne connaît pas, un garde-fou qui demande l'accord
-avant une commande Docker qui viserait la stack du checkout principal depuis un
-worktree, et un `wtm clean -y` détaché en fin de session, après que Claude Code a
-supprimé son worktree. Ils sortent sans rien faire hors worktree, ou si `wtm` ou
-docker manquent.
+Le plugin installe aussi trois hooks : le chargement de la skill `wtm` à l'ouverture
+d'une session dans un projet enregistré, doublé d'un rappel d'adoption quand le
+worktree est un que `wtm` ne connaît pas ; un garde-fou qui refuse un `wtm create`
+depuis une session isolée par Claude Code, dont les éditions n'atteindraient jamais le
+worktree créé, et demande l'accord avant une commande Docker qui viserait la stack du
+checkout principal depuis un worktree ; et un `wtm clean -y` détaché en fin de session,
+après que Claude Code a supprimé son worktree. Ils sortent sans rien faire hors projet
+`wtm`, ou si `wtm`, `jq` ou docker manquent.
 
 ## Installation
 
@@ -44,8 +46,9 @@ claude-skills/
 │   └── plugin.json        # métadonnées du plugin
 ├── hooks/
 │   ├── hooks.json         # PreToolUse, SessionStart et SessionEnd
-│   ├── wtm-adopt-hint     # signale un worktree que wtm ne connaît pas
-│   ├── wtm-guard          # demande l'accord sur un docker qui viserait la mauvaise stack
+│   ├── wtm-context        # charge la skill wtm, et signale un worktree non adopté
+│   ├── wtm-guard          # refuse un `wtm create` depuis une session isolée par Claude
+│   │                      # Code, demande l'accord sur un docker qui viserait la mauvaise stack
 │   └── wtm-sweep          # `wtm clean -y` quand un worktree disparaît
 └── skills/
     ├── review-pr/

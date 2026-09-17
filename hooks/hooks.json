@@ -14,11 +14,11 @@
     ],
     "SessionStart": [
       {
-        "matcher": "startup|resume",
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/wtm-adopt-hint\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/wtm-context\"",
             "async": false,
             "timeout": 15
           }

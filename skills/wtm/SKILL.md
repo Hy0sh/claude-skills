@@ -222,6 +222,16 @@ before writing into a directory wtm did not create; `-y` answers for a script or
 agent, and without a terminal the command refuses rather than writing unasked. A
 worktree on a detached HEAD cannot be adopted: wtm keys a worktree by its branch.
 
+**Inside a `claude --worktree` session, never `wtm create`.** Claude Code confines such
+a session's edits to `.claude/worktrees/`, so a worktree cut anywhere else is one the
+session can read and never write, and the detour ends in a `wtm remove` of what was
+just built. The worktree is already there; adopting is what gives it a stack. When the
+work belongs to a branch that exists already, locally or on a remote, `git switch
+<branch>` comes first and `wtm adopt -y` after it, since `--as` renames and therefore
+refuses a name already taken. For a branch nobody has cut yet, `wtm adopt --as <branch>
+-y` does both in one move. Either way the switch happens before the adoption, never
+after: that order is what the next paragraph is about.
+
 **One worktree, one branch.** wtm keys a worktree by the branch git reports for it,
 so switching branches inside one (a `gh pr checkout`, a `git switch`) breaks the pair.
 An adopted worktree disappears outright: `wtm list` stops showing it, its recorded
@@ -233,12 +243,16 @@ worktree for branch`. Reviewing several branches means one worktree each,
 
 ## The hooks this plugin installs
 
-Two lifecycle hooks ship with the skill, so what follows does not rest on anyone
+Three hooks ship with the skill, so what follows does not rest on anyone
 remembering it.
 
-- `SessionStart` speaks up when the session opens in a worktree wtm does not know:
+- `SessionStart` hands this skill over whole when the session opens in a registered
+  project, and adds a line when the worktree it opens in is one wtm does not know:
   no recorded index, no isolated ports, no stack of its own. Tell the user and offer
   `wtm adopt`, which is free until something is built on it.
+- `PreToolUse` refuses a `wtm create` typed from a session Claude Code isolated, whose
+  edits would never reach the worktree it cuts, and asks before a bare `docker compose`
+  aimed at a worktree, which addresses the main checkout's stack.
 - `SessionEnd` runs `wtm clean -y`, detached from the hook, since Claude Code gives a
   plugin's SessionEnd hooks 1.5 seconds before killing them. It releases the indices
   no worktree stands behind and drops the volumes and images their stacks left, which
@@ -247,8 +261,8 @@ remembering it.
   there is nothing to clean. `WorktreeRemove` would be the natural place, but it only
   fires for worktrees a `WorktreeCreate` hook made, never for git's own.
 
-Neither hook can reach a live worktree: everything they touch is keyed on a branch
-git no longer has a checkout for. They are not a replacement for `wtm remove` at the
+The sweep cannot reach a live worktree: everything it touches is keyed on a branch
+git no longer has a checkout for. It is not a replacement for `wtm remove` at the
 end of your task, only the net under the worktrees that leave another way.
 
 ## Working inside a worktree

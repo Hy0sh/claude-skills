@@ -1,0 +1,41 @@
+#!/bin/sh
+# Claude Code loads a skill when the model reaches for it, and the wtm disciplines are
+# exactly what an agent in a hurry never reaches for: it types `wtm create` from a
+# session that cannot edit what it creates. A session opened in a registered project is
+# handed the whole skill instead of a pointer to it.
+set -u
+
+command -v wtm >/dev/null 2>&1 || exit 0
+command -v jq >/dev/null 2>&1 || exit 0
+here=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+
+# A non-zero list is a directory of no registered project, which none of this concerns.
+list=$(wtm list 2>/dev/null) || exit 0
+
+skill=$(CDPATH= cd "$(dirname "$0")/../skills/wtm" 2>/dev/null && pwd)/SKILL.md
+[ -f "$skill" ] || exit 0
+
+# A worktree another tool cut is invisible to wtm until it is adopted: no index, no
+# isolated ports, no stack of its own. Opening a session in one is the moment to say so,
+# while the rename adopting offers is still free.
+note=""
+common=$(git rev-parse --git-common-dir 2>/dev/null) || common=.git
+# The main repository answers a relative ".git"; only a linked worktree is given the
+# absolute path of the git directory it borrows.
+case "$common" in
+/*)
+  # Since 0.14.0 the listing also carries the worktrees left to adopt, so holding the
+  # path is no longer the same as being known: the status column is what says so, and a
+  # path the listing does not carry at all belongs to an older binary that hid them.
+  status=$(printf '%s\n' "$list" | awk -v p="$here" '$NF == p { print $(NF - 1) }')
+  case "$status" in
+  adoptable | "") note="This worktree is not adopted by wtm: no recorded index, no isolated ports, no stack of its own. Adopt it where it stands rather than creating another one (\`git switch <branch>\` first if the work belongs to another branch, then \`wtm adopt -y\`), and tell the user." ;;
+  esac
+  ;;
+esac
+
+jq -nc --arg n "$note" --rawfile s "$skill" \
+  '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:(
+     (if $n == "" then "" else $n + "\n\n" end)
+     + "This project is managed by wtm, and the skill below governs every worktree, stack and runtime-proof move in it. Its full text follows: treat it as already loaded rather than reaching for the Skill tool.\n\n"
+     + $s)}}'

@@ -12,17 +12,24 @@
 # The directory that matters is the one the command reaches, not the one the session sits
 # in: `cd <worktree> && docker compose …` typed from the main checkout is the same mistake.
 # So the segments are walked in order, carrying the directory each `cd` moves to.
+#
+# The second rule has the opposite shape: a session Claude Code isolated confines its
+# edits to `.claude/worktrees/`, so a `wtm create` from there cuts a worktree the session
+# will never be able to write in. That one is judged on the session's own directory.
 set -u
 
 payload=$(cat)
 cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -z "$cmd" ] && exit 0
 
-ask() {
-  jq -nc --arg r "$1" \
-    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:$r}}'
+decide() {
+  jq -nc --arg d "$1" --arg r "$2" \
+    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:$d,permissionDecisionReason:$r}}'
   exit 0
 }
+
+ask() { decide ask "$1"; }
+deny() { decide deny "$1"; }
 
 # The main repository answers a relative ".git"; only a linked worktree is given the
 # absolute path of the git directory it borrows.
@@ -31,6 +38,9 @@ is_worktree() {
   common=$(git -C "$1" rev-parse --git-common-dir 2>/dev/null) || return 1
   case "$common" in /*) return 0 ;; *) return 1 ;; esac
 }
+
+confined=0
+case "$PWD" in */.claude/worktrees/*) confined=1 ;; esac
 
 curdir=$PWD
 # Set when a `cd` target cannot be resolved without running it — `cd $(wtm path …)` being
@@ -59,8 +69,14 @@ while IFS= read -r seg; do
     continue
   fi
 
-  # Anything routed through wtm is already correct, including `wtm run -- docker compose …`.
-  [ "${first##*/}" = "wtm" ] && continue
+  # Anything else routed through wtm is already correct, including `wtm run -- docker compose …`.
+  if [ "${first##*/}" = "wtm" ]; then
+    read -r verb _ <<< "$rest"
+    if [ "$verb" = "create" ] && [ "$confined" -eq 1 ]; then
+      deny "Session isolée par Claude Code : les éditions sont confinées à \`.claude/worktrees/\`, donc un worktree créé ailleurs sera illisible pour Edit/Write. Ce worktree-ci s'adopte sur place : \`git switch <branche>\` (ou \`git switch -c <branche>\` si elle n'existe pas encore), puis \`wtm adopt -y\`. Le switch passe AVANT l'adoption, wtm keyant un worktree par sa branche."
+    fi
+    continue
+  fi
   [ "${first##*/}" = "docker" ] || continue
 
   if [ "$opaque_cd" -eq 0 ] && ! is_worktree "$curdir"; then continue; fi
