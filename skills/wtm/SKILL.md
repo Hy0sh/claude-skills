@@ -104,6 +104,24 @@ running. What the sections below describe then arrived version by version:
 - **0.12.0** — a `create` that releases those indices itself before allocating its
   own, so a worktree gone outside wtm stops pushing the next one onto ports its
   neighbours never used.
+- **0.13.0** — the rest of what `doctor` can now see: the stacks of worktrees that
+  no longer exist, the worktrees the registry holds no index for, and the directories
+  git no longer lists. One worktree of the second kind switches the stack, volume and
+  image reports off for its whole project, a stack of theirs being indistinguishable
+  from one a removed worktree left; before, doctor answered "nothing left behind"
+  where it meant "cannot tell". `remove --force` deletes a directory git no longer
+  lists, which until then could only be cleared by hand.
+- **0.13.1** — `clean` names the two findings it declines, those same directories and
+  the anonymous volumes, each with the command that settles it. It still leaves them
+  alone, nothing being able to read whether such a directory holds uncommitted work.
+- **0.14.0** — `wtm list` marks the worktrees left to adopt `adoptable`, instead of
+  answering `no worktree for <project>` with a dozen of them sitting there. That is
+  how you name one for `wtm adopt` without knowing its branch by heart.
+- **0.14.1** — `wtm exec` names its own compose files. Before, an exec typed inside a
+  session opened by `wtm run` or `create --run` followed that session's `COMPOSE_FILE`
+  and addressed the worktree the session had been opened on, failing on a `stat` of a
+  path removed since. `start` was never affected, which made the two read as a stale
+  path held somewhere in wtm.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -135,7 +153,7 @@ wtm adopt                                # this worktree, wherever another tool 
 wtm adopt --as feat/my-branch            # renaming the branch on the way in
 wtm adopt my-app worktree-curry -y       # named from anywhere, nothing asked
 
-wtm list                                 # INDEX / BRANCH / STATUS / PATH
+wtm list                                 # INDEX / BRANCH / STATUS / PATH, adoptable ones included
 wtm start feat/my-branch                 # bring a stopped stack back up
 wtm stop feat/my-branch                  # stop the stack, keep the worktree
 wtm stop --all                           # every worktree of the project
