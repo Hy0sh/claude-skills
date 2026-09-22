@@ -122,6 +122,13 @@ running. What the sections below describe then arrived version by version:
   and addressed the worktree the session had been opened on, failing on a `stat` of a
   path removed since. `start` was never affected, which made the two read as a stale
   path held somewhere in wtm.
+- **0.15.0** — `--profile` starts a named subset of the stack, `start_dependencies`
+  lets a `migrate_command` that also seeds reach the services it needs while the
+  backup refreshes, and that refresh builds its throwaway image instead of taking
+  whatever the cache held. The note a fresh stack printed about its missing seed is
+  gone: a project whose `migrate_command` seeds the dump looks exactly like one that
+  never seeded, and following the note replayed a seeder over rows already there. A
+  branch switched inside a worktree no longer costs that worktree its stack.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -148,6 +155,7 @@ wtm create feat/my-branch --ignore-memory         # never ask, however tight the
 wtm create feat/my-branch --exec 'npm run seed'   # a shell line in the app container
 wtm create feat/my-branch --run 'pnpm install'    # a shell line on the host, once ready
 wtm create feat/my-branch --from-here    # base = the branch of the current directory
+wtm create feat/my-branch --profile light         # only the services that profile names
 
 wtm adopt                                # this worktree, wherever another tool cut it
 wtm adopt --as feat/my-branch            # renaming the branch on the way in
@@ -209,6 +217,21 @@ nobody is there to answer. Answering no leaves the worktree without its stack, w
 is what `--no-start` produces, and `wtm start` brings it up later without replaying
 the seed.
 
+**`--profile` is the answer to that memory question** (**0.15.0**). The project's
+registry entry names the subsets worth starting under `profiles` — `"light": ["db",
+"backend", "frontend"]` — and `--profile light` on `create`, `adopt` or `start`
+brings up that one instead of the whole stack. What it saves is memory, not time:
+measured on a Django project, dropping the admin UI, a kubectl sidecar and the
+periodic-task worker took a stack from 1510 MiB to 969, which on an 8 GB Docker VM is
+eight worktrees in parallel instead of five. The list is a floor, not an exact set:
+compose also brings up whatever those services declare in `depends_on`. Nothing is
+remembered, no flag meaning the whole stack as it always has, and a name the project
+does not declare fails before anything starts. Narrowing is not retroactive either —
+starting again with a wider profile adds what was missing and leaves the rest
+running, which is how a service a profile forgot is brought in, while taking one away
+needs a `wtm stop` first. The map is written by hand in `config.json`; no flag
+creates it, so propose the JSON and let the user paste it.
+
 **Adopting the worktree you are already in.** `wtm adopt` with no argument takes the
 worktree of the current directory and gives it what a created one gets: a stable
 index, remapped ports, the provisioned `.env` files and compose overrides, the
@@ -234,12 +257,17 @@ after: that order is what the next paragraph is about.
 
 **One worktree, one branch.** wtm keys a worktree by the branch git reports for it,
 so switching branches inside one (a `gh pr checkout`, a `git switch`) breaks the pair.
-An adopted worktree disappears outright: `wtm list` stops showing it, its recorded
-index becomes one `doctor` reports as standing behind nothing, and its stack keeps
-running under the old compose project name. A worktree wtm created stays listed but
-under the new branch with no index, and `wtm stop <original-branch>` answers `no
-worktree for branch`. Reviewing several branches means one worktree each,
-`wtm create <branch>` per branch, never a switch inside one.
+The worktree resurfaces under its new name, marked `adoptable`, with no index, while
+its stack keeps running under the old compose project name and every command still
+addresses it by the branch the registry recorded: `wtm stop <new-branch>` answers `no
+worktree for branch`. Since **0.15.0** the drift no longer costs the stack — the
+worktree's path is recorded next to its index, so `doctor` tells a switched branch
+from a worktree that really left, and the sweep a `create` runs refuses to take down
+a stack whose containers are still up. Before that, creating an unrelated worktree
+deleted such a database as a side effect. The pair stays broken, though: re-keying a
+drifted worktree to its new branch is not implemented, so the way out is to switch
+the branch back, or to address it by its recorded one. Reviewing several branches
+means one worktree each, `wtm create <branch>` per branch, never a switch inside one.
 
 ## The hooks this plugin installs
 
@@ -282,6 +310,25 @@ wtm run feat/my-branch -- scripts/some-compose-script.sh
 cd $(wtm path feat/my-branch)
 ```
 
+### Running a test suite — the dump is the point
+
+A stack's database is the **pre-migrated dump**. A test runner that builds its own test
+database from scratch throws that away: it replays every migration inside the container
+and gets killed for it. The exec dies on **exit 137** just as the runner announces it is
+creating the test database, which reads like a broken stack and is not one.
+
+Check the dump, then make the runner reuse it:
+
+```bash
+wtm backup list                  # "N commits behind" on this project? refresh first
+wtm backup refresh <project>     # replays the migrations once, into the dump
+```
+
+Then run the suite through whatever flag the runner offers to **keep an existing test
+database** instead of recreating it. Without that flag the dump buys nothing, however
+fresh it is. A first exec dying on 137 is this, not an OOM to work around and not a
+crash loop: read `wtm backup list` before suspecting the stack.
+
 From inside the worktree itself — where an adopted `claude --worktree` session already
 is — run git bare: `git fetch`, `git pull`, `git merge`. The working directory is the
 worktree, and only `COMPOSE_PROJECT_NAME` and `COMPOSE_FILE` justify the `wtm run`
@@ -317,10 +364,13 @@ reconstruct it by hand and do not guess container names.
 **A fresh worktree needs its own seed.** The dump restores the database as `migrate`
 left it (schema, migration table, whatever the migrations create) but never the seed
 data, because seeds change often and replay fast. A project with a `post_create`
-seeds itself; without one, a brand-new stack prints the reminder once, with the
-command to run. Run it before concluding the app is broken. `--no-post-create` skips
-that seed for one worktree, for a branch opened to read rather than to work in, and
-prints the `wtm exec` line that plays it later.
+seeds itself; without one, a fresh stack comes up on a database nothing populated and
+says nothing about it. Read the registry rather than the screen before concluding the
+app is broken — **0.15.0** dropped the note that used to fire there, a project whose
+`migrate_command` seeds the dump being indistinguishable from one that never seeded,
+and replaying a seeder over rows already in the dump is rarely idempotent.
+`--no-post-create` skips that seed for one worktree, for a branch opened to read
+rather than to work in, and prints the `wtm exec` line that plays it later.
 
 `post_create` does not run as soon as docker says the containers started: wtm waits
 for the database, then for the application service to report itself healthy through
@@ -515,6 +565,13 @@ Two things to read in that output rather than discover later:
   (`manage.py seed_data`, a dev-users command…), played in the application service
   once the database answers and that service reports itself healthy → `--post-create`.
   Ask for the seed steps only: a script that resets the database undoes the restore
+- **What the migration command needs besides the database** — only for a
+  `migrate_command` that also seeds, and whose seeding talks to object storage, a
+  cache or a search index: the refresh runs its throwaway container with `--no-deps`,
+  which is right for a plain migration and kills a seeding one (`Object storage is
+  unreachable, cannot seed file-backed data`) → `--start-dependencies` (**0.15.0**),
+  which brings up what the application service declares in `depends_on` for the time
+  of the refresh and takes it back down with it. Off by default
 - **How slowly the stack boots** — only for a project whose services install their
   dependencies at startup and outlast the built-in bounds (a minute for the database,
   ten for the application) → `--ready-timeout`, `--ready-interval`
