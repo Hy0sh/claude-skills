@@ -195,7 +195,7 @@ If no samples come back, fall back to a concise, collaborative-colleague tone. O
 - **Two to three sentences, 110 to 500 characters.** Structure is problem → consequence (`→`), no preamble. End on the technical fact.
 - **No closing question, no trailing `stp`.** Interrogative endings were removed by hand on 2026-07-13 and again on 2026-08-17; do not reintroduce them.
 - **Do not hand over the solution when it is trivial.** A `&&` to flip to `||`, a key to rename, an argument to add: name the defect and its consequence, the author concludes. Writing the fix is condescending and pads the thread. A fix sentence survives only when it carries a choice the author could not guess — the kind of "À déplacer dans `bookings.vehicles.index.tsx`" that names a destination.
-- **Runtime evidence does not go in the comment.** Screenshots, console traces and repro scenarios stay in the conversation: they exist to settle severity with the reviewer, not to fill the thread. On PR #1277, nine "Vérifié en local : …" paragraphs were deleted by hand from nine posted threads.
+- **Runtime evidence does not go in the comment.** Screenshots, console traces and repro scenarios stay in the conversation: they exist to settle severity with the reviewer, not to fill the thread. On one PR, nine "Vérifié en local : …" paragraphs were deleted by hand from nine posted threads.
 - **Zero to one emoji**, ideally none. Never `😅🙏` in series.
 
 **Anchoring rule (matters when the reviewer posts).** An inline comment must attach to a line **present in the PR diff**. If the line you want to flag is *not* in the diff (e.g. an unchanged call site that should have been touched), anchor on the nearest added/changed line in the same hunk that is thematically related, and reference the true line number in the comment text. Compute the final-file line number from the diff hunk header (`@@ -a,b +c,d @@`).
@@ -204,9 +204,9 @@ If no samples come back, fall back to a concise, collaborative-colleague tone. O
 
 **This skill performs no mutation at all.** It produces the structured review and the drafts, and stops there. The reviewer reads them, rewrites them in their own words, and posts them by hand.
 
-The reason is a team rule, not a technical limit. Since 2026-08-27 the gallia-utopia team runs an experiment that **bans AI-generated review comments**: using an LLM to help read a diff stays fine, but the reviewer must do their own pass and rewrite anything generated before it reaches the PR. A comment posted from here lands under the reviewer's account, so it falls squarely under that ban.
+The reason is a team rule, not a technical limit. Since 2026-08-27 the user's team runs an experiment that **bans AI-generated review comments**: using an LLM to help read a diff stays fine, but the reviewer must do their own pass and rewrite anything generated before it reaches the PR. A comment posted from here lands under the reviewer's account, so it falls squarely under that ban.
 
-**The ban covers replies too**, extended on 2026-09-09: three replies posted on PR #1488 through `gh api .../comments/<id>/replies` had to be taken down. When a review comes in, analyse it, verify it, measure if needed, then list the response material in conversation — the point raised, what is true or false in it, the numbers, what was fixed — and let the reviewer write and post.
+**The ban covers replies too**, extended on 2026-09-09: three replies posted through `gh api .../comments/<id>/replies` had to be taken down. When a review comes in, analyse it, verify it, measure if needed, then list the response material in conversation — the point raised, what is true or false in it, the numbers, what was fixed — and let the reviewer write and post.
 
 So: present the drafts, say which file and which line each one anchors to, and stop. Do not offer to post them, and do not propose the `gh api` command that would.
 
