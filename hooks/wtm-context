@@ -34,8 +34,18 @@ case "$common" in
   ;;
 esac
 
-jq -nc --arg n "$note" --rawfile s "$skill" \
+# Agents never picked a profile they had to go and look for. Shown here, the choice
+# is in front of them before the first start. An older wtm answers with the help of
+# `wtm project` and exit 0, so only the listing's closing line counts as a listing.
+profiles=$(wtm project profiles 2>/dev/null) || profiles=""
+case "$profiles" in
+*"(none)  all "*) ;;
+*) profiles="" ;;
+esac
+
+jq -nc --arg n "$note" --arg p "$profiles" --rawfile s "$skill" \
   '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:(
      (if $n == "" then "" else $n + "\n\n" end)
+     + (if $p == "" then "" else "This project declares stack profiles. Pass the smallest one covering the task as --profile on every wtm create, adopt and start:\n\n" + $p + "\n\n" end)
      + "This project is managed by wtm, and the skill below governs every worktree, stack and runtime-proof move in it. Its full text follows: treat it as already loaded rather than reaching for the Skill tool.\n\n"
      + $s)}}'
