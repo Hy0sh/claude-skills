@@ -165,7 +165,8 @@ wtm list                                 # INDEX / BRANCH / STATUS / PATH, adopt
 wtm start feat/my-branch                 # bring a stopped stack back up
 wtm stop feat/my-branch                  # stop the stack, keep the worktree
 wtm stop --all                           # every worktree of the project
-wtm remove feat/my-branch                # stack, volumes and built images go, branch kept
+wtm remove feat/my-branch                # stack, volumes and built images go, branch kept;
+                                         # the directory too, only if wtm created it
 wtm remove feat/my-branch --force        # despite modified tracked files, or a lock
 wtm remove --all -y                      # lists them, asks once, -y answers for you
 ```
@@ -253,7 +254,9 @@ work belongs to a branch that exists already, locally or on a remote, `git switc
 <branch>` comes first and `wtm adopt -y` after it, since `--as` renames and therefore
 refuses a name already taken. For a branch nobody has cut yet, `wtm adopt --as <branch>
 -y` does both in one move. Either way the switch happens before the adoption, never
-after: that order is what the next paragraph is about.
+after: that order is what the next paragraph is about. At the end of the session,
+`wtm remove` from inside that worktree is safe: it takes the stack and leaves the
+directory the session runs in, Claude Code having cut it.
 
 **One worktree, one branch.** wtm keys a worktree by the branch git reports for it,
 so switching branches inside one (a `gh pr checkout`, a `git switch`) breaks the pair.
