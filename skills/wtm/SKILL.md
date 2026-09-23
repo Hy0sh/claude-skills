@@ -129,6 +129,10 @@ running. What the sections below describe then arrived version by version:
   gone: a project whose `migrate_command` seeds the dump looks exactly like one that
   never seeded, and following the note replayed a seeder over rows already there. A
   branch switched inside a worktree no longer costs that worktree its stack.
+- **0.16.0** — `--profile-set` on `project create` and `project edit` writes the
+  profiles, until then only read from a hand-edited `config.json`.
+- **0.17.0** — `wtm project profiles` says what each profile starts and leaves out,
+  `depends_on` included, and `--profile-description` says when to pick it.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -155,7 +159,8 @@ wtm create feat/my-branch --ignore-memory         # never ask, however tight the
 wtm create feat/my-branch --exec 'npm run seed'   # a shell line in the app container
 wtm create feat/my-branch --run 'pnpm install'    # a shell line on the host, once ready
 wtm create feat/my-branch --from-here    # base = the branch of the current directory
-wtm create feat/my-branch --profile light         # only the services that profile names
+wtm create feat/my-branch --profile light         # only that profile's services
+wtm project profiles                     # which profile, and what each one leaves out
 
 wtm adopt                                # this worktree, wherever another tool cut it
 wtm adopt --as feat/my-branch            # renaming the branch on the way in
@@ -218,20 +223,21 @@ nobody is there to answer. Answering no leaves the worktree without its stack, w
 is what `--no-start` produces, and `wtm start` brings it up later without replaying
 the seed.
 
-**`--profile` is the answer to that memory question** (**0.15.0**). The project's
-registry entry names the subsets worth starting under `profiles` — `"light": ["db",
-"backend", "frontend"]` — and `--profile light` on `create`, `adopt` or `start`
-brings up that one instead of the whole stack. What it saves is memory, not time:
-measured on a Django project, dropping the admin UI, a kubectl sidecar and the
-periodic-task worker took a stack from 1510 MiB to 969, which on an 8 GB Docker VM is
-eight worktrees in parallel instead of five. The list is a floor, not an exact set:
-compose also brings up whatever those services declare in `depends_on`. Nothing is
-remembered, no flag meaning the whole stack as it always has, and a name the project
-does not declare fails before anything starts. Narrowing is not retroactive either —
-starting again with a wider profile adds what was missing and leaves the rest
-running, which is how a service a profile forgot is brought in, while taking one away
-needs a `wtm stop` first. The map is written by hand in `config.json`; no flag
-creates it, so propose the JSON and let the user paste it.
+**A project that declares profiles gets one on every `create`, `adopt` and `start`.**
+Read `wtm project profiles` first (**0.17.0**; the session-start hook already prints
+it for this project): for each profile it lists the services named, those
+`depends_on` brings up on top, those left out, and when to pick it. Take the smallest
+one whose services cover the task, and start the whole stack only when you can name
+the service none of them has. `--ignore-memory` is no substitute: it silences the
+question, the profile removes its cause. Measured on a Django project, dropping the
+admin UI, a kubectl sidecar and the periodic-task worker took a stack from 1510 MiB to
+969, eight worktrees on an 8 GB Docker VM instead of five, and the start time barely
+moves. Nothing is remembered, so pass the flag again on every `start`. Narrowing is
+not retroactive: a wider profile adds what was missing and leaves the rest running,
+which is how a service you left out is brought in later, while taking one away needs
+a `wtm stop` first. Profiles live in the registry, written by `wtm project edit
+--profile-set NAME=svc,svc` and `--profile-description NAME=text` (**0.16.0**,
+**0.17.0**), which is the user's to run.
 
 **Adopting the worktree you are already in.** `wtm adopt` with no argument takes the
 worktree of the current directory and gives it what a created one gets: a stable
@@ -328,9 +334,15 @@ wtm backup refresh <project>     # replays the migrations once, into the dump
 ```
 
 Then run the suite through whatever flag the runner offers to **keep an existing test
-database** instead of recreating it. Without that flag the dump buys nothing, however
-fresh it is. A first exec dying on 137 is this, not an OOM to work around and not a
-crash loop: read `wtm backup list` before suspecting the stack.
+database** instead of recreating it (`--keepdb` for Django). Know what that flag does
+not do: the dump is restored into the application's database, and a runner that keeps
+a test database of its own (Django's `test_<name>`) finds none in a fresh worktree.
+Its first run still creates it empty and replays every migration; only the runs after
+it in that worktree are fast. Preparing that database is the project's business, not
+wtm's: look for a project skill or script that does it before the first run. Failing
+that, run one targeted module first, never the whole suite, and keep the flag on every
+run after. A first exec dying on 137 is this, not an OOM to
+work around and not a crash loop: read `wtm backup list` before suspecting the stack.
 
 From inside the worktree itself — where an adopted `claude --worktree` session already
 is — run git bare: `git fetch`, `git pull`, `git merge`. The working directory is the
