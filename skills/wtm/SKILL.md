@@ -133,6 +133,9 @@ running. What the sections below describe then arrived version by version:
   profiles, until then only read from a hand-edited `config.json`.
 - **0.17.0** — `wtm project profiles` says what each profile starts and leaves out,
   `depends_on` included, and `--profile-description` says when to pick it.
+- **0.18.0** — the `project create` / `project edit` walk offers what the project
+  already says as defaults, flags a migrations pathspec matching no tracked file, and
+  saves nothing until the user confirms a closing summary.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -558,7 +561,8 @@ Two things to read in that output rather than discover later:
   project really branches off something else: an empty answer records nothing and
   follows `default_base_branch` from `config.json`, then `develop`
 - **Pre-migrated dump** — worth it when replaying the migration history is slow.
-  → `--dump`, plus `--db-service` / `--db-user` if they differ from `db` / `postgres`
+  → `--dump`, plus `--db-service` if it is not `db`, and `--db-user` for postgres only
+  when it is not `postgres` (mysql, mariadb and mongodb connect as root, never read it)
 - **Migration path** — the service and the commands that must run before the dump is
   taken → `--app-service`, `--deps`, `--migrate`
 - **Where the migration files live** — only asked because the default pathspec
@@ -604,9 +608,12 @@ wtm project create my-app --dir ~/dev/projects/my-app --base develop \
 
 Hand over the full command: the interview is done, and a command the user can read
 beats a walk they have to answer. Mention that `wtm project create my-app` alone
-would ask the same things one question at a time (services read from the compose
-file, current values as defaults), which is the way out when the interview left
-something unsettled. `--no-input` is the opposite end: a missing value becomes an
+would ask the same things one question at a time, which is the way out when the
+interview left something unsettled: since **0.18.0** it offers what the project
+already says (database service by its image, `POSTGRES_USER`, the one service with a
+`build:`, the framework's migration command, the database variables of the compose
+environment), flags a pathspec matching no tracked file, and writes nothing until a
+closing summary is confirmed. `--no-input` is the opposite end: a missing value becomes an
 error instead of a question, which is what keeps a scripted registration from
 hanging on a prompt nobody reads. Both are theirs to run: the walk waits on their
 answers, so never start it yourself.
