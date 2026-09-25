@@ -25,6 +25,19 @@ No setup step. Before step 3, work out each role below from what the repository 
 
 Project skills are the ones listed in the session under their bare name, from the repository's `.claude/skills/`. Read each one at the step that needs it; never copy its content here.
 
+### Remembered answers
+
+The recette and the commits-and-PR questions are asked once per repository. The answers live outside the plugin, in the user's per-repository folder, where a plugin update cannot overwrite them:
+
+```
+~/.config/hy0sh-skills/repos/<owner>/<repo>/recette.md
+~/.config/hy0sh-skills/repos/<owner>/<repo>/commits.md
+```
+
+`<owner>/<repo>` is `gh repo view --json nameWithOwner --jq .nameWithOwner`. A file holds either one line `skill: <name>` or the user's description, verbatim. It wins over a project skill found by its description: the user chose it.
+
+File present → use it and name it in the report (`recette : recette.md`), no question. File absent and no project skill → ask at GATE 1, then write the answer to that file once the user has given it. A correction the user makes at GATE 1 overwrites the file.
+
 ## Checklist
 
 ```
@@ -179,7 +192,7 @@ The folder keys on the branch and not on the ticket, because one ticket can ship
 
 ### When the recette was a description
 
-The user described how to check the ticket because the project has no recette skill. Once the recette is green, offer — once, without insisting — to write what was learned (URL, accounts, login, traps met) as a project skill under `.claude/skills/`, so the next ticket starts from it. It is the user's call, and it goes in its own commit, never in this ticket's diff unless they say so.
+The user described how to check the ticket because the project has no recette skill. Add the traps met on the way to `recette.md`, so the next ticket starts from them. That file is the user's alone: once the recette is green, offer — once, without insisting — to turn it into a project skill under `.claude/skills/`, which the rest of the team would get too. It is the user's call, and it goes in its own commit, never in this ticket's diff unless they say so.
 
 ## 8. CI gates, commits, PR
 

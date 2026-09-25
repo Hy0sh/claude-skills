@@ -25,19 +25,19 @@ gh pr view --json title,url --jq '[.title, .url] | @tsv'   # add the number as a
 
 No open pull request on the branch: say so and stop.
 
-**2. Resolve the channel.** `gh repo view --json nameWithOwner --jq .nameWithOwner`, then read `~/.config/hy0sh-skills/slack-channels.json`. It lives outside the plugin because channel ids are the user's own data, and a plugin update would overwrite anything kept next to this file:
+**2. Resolve the channel.** `gh repo view --json nameWithOwner --jq .nameWithOwner`, then read `~/.config/hy0sh-skills/repos/<owner>/<repo>/slack.json`. It lives in the user's per-repository folder, outside the plugin, because channel ids are the user's own data and a plugin update would overwrite anything kept next to this file:
 
 ```json
-{ "owner/repo": { "channel_id": "C0123456789", "name": "#some-channel", "connect": true } }
+{ "channel_id": "C0123456789", "name": "#some-channel", "connect": true }
 ```
 
-File or repository absent: find the channel with `slack_search_channels`, have the user confirm it, then add the entry (creating the file if needed) so the next call is silent.
+File absent: find the channel with `slack_search_channels`, have the user confirm it, then write the file (creating the folder if needed) so the next call is silent.
 
 **3. Post** with `slack_send_message`:
 
 | Argument | Value |
 |---|---|
-| `channel_id` | the id from `slack-channels.json` |
+| `channel_id` | the id from `slack.json` |
 | `message` | `[[PR](<url>)] <title>`, plus any suffix the user asked for (a series marker such as `2/5` goes after the title) |
 | `unfurl_app_links` | leave it out |
 
@@ -47,7 +47,7 @@ Post directly, without asking for a go: that is the point of the skill.
 `mcp_externally_shared_channel_restricted`. It is a platform rule, not a
 transient failure, so retrying and rewording change nothing: fall straight to
 `slack_send_message_draft`, same `channel_id`, same message, and tell the user
-the draft is waiting in the channel for one click. An entry marked
+the draft is waiting in the channel for one click. A `slack.json` marked
 `"connect": true` goes to the draft directly; the first refusal on an unmarked
 one adds the mark.
 

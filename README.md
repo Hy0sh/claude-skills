@@ -10,10 +10,23 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | `wtm` | Usage de [worktree-manager](https://github.com/Hy0sh/worktree-manager) : worktree git avec sa stack Docker isolée, plus les disciplines d'isolation et de preuve runtime |
 | `dailysum` | Portion personnelle du daily sum collaboratif (commits du jour, enrichissement PR/Jira) à coller dans Slack |
 | `veille-pr` | État de mes PR ouvertes en une passe (conflits, CI, fils de review non résolus, piles), puis liste d'actions ordonnée. Lecture seule |
-| `pr-review-slack` | Annonce d'une PR sur le canal Slack du projet pour demander une review. La table repo → canal vit dans `~/.config/hy0sh-skills/slack-channels.json` |
+| `pr-review-slack` | Annonce d'une PR sur le canal Slack du projet pour demander une review |
 | `jira-read` | Lecture de Jira : clé du ticket depuis la branche, les commits ou la PR, ticket complet avec commentaires, recherche JQL. acli d'abord, MCP Atlassian en secours. Lecture seule |
 | `point-sprint` | Mes tickets Jira confrontés à l'état réel du code (PR mergées, ouvertes, en draft) : statuts faux, tickets libres dans mes épics, prochain ticket à prendre. Lecture seule |
 | `ticket-to-pr` | Un ticket Jira mené jusqu'à la PR : antériorité, faisabilité, worktree `wtm`, plan, implémentation par sous-agents, recette, gates, avec quatre portes de validation. S'appuie sur les skills du projet quand il en a, et demande sinon comment recetter et comment committer |
+
+## Configuration par repo
+
+Ce que les skills apprennent d'un repo est rangé hors du plugin, pour qu'une mise à jour
+ne l'écrase pas, dans `~/.config/hy0sh-skills/repos/<owner>/<repo>/`. Chaque fichier est
+écrit par la skill la première fois qu'elle pose la question, et reste modifiable à la
+main :
+
+| Fichier | Écrit par | Contenu |
+|---|---|---|
+| `slack.json` | `pr-review-slack` | le canal de review : `channel_id`, `name`, `connect` pour un canal Slack Connect |
+| `recette.md` | `ticket-to-pr` | `skill: <nom>`, ou le descriptif de la recette runtime |
+| `commits.md` | `ticket-to-pr` | `skill: <nom>`, ou la convention de commits et de PR |
 
 Le plugin installe aussi trois hooks : le chargement de la skill `wtm` à l'ouverture
 d'une session dans un projet enregistré, doublé d'un rappel d'adoption quand le
