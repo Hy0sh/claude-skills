@@ -1,7 +1,7 @@
 {
   "name": "hy0sh-skills",
   "description": "Skills personnels : review-pr (review structurée de PR GitHub), wtm (worktree git avec stack Docker isolée, via worktree-manager), dailysum (portion personnelle du daily sum collaboratif), pr-watch (état de mes PR ouvertes), notify-pr-slack (annonce d'une PR sur Slack), jira-read (lecture de Jira), sprint-check (mes tickets Jira face à l'état du code) et ticket-to-pr (un ticket Jira mené jusqu'à la PR)",
-  "version": "0.14.2",
+  "version": "0.15.0",
   "author": {
     "name": "François Bouyer",
     "email": "francois.bouyer@thetribe.io"
