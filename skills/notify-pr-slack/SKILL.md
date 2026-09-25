@@ -1,5 +1,5 @@
 ---
-name: pr-review-slack
+name: notify-pr-slack
 description: Use when the user asks to announce a pull request on Slack to get it reviewed — "demande de review", "poste la PR sur Slack", "annonce ma PR", "review please" — for the current branch or for a pull request given by number or URL.
 ---
 

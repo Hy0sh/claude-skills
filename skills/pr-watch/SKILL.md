@@ -1,5 +1,5 @@
 ---
-name: veille-pr
+name: pr-watch
 description: Take stock of the user's own open pull requests in one pass — conflicts with the base branch, CI verdict, unanswered review threads, and position in a stack — then propose an ordered list of actions. Use when the user asks for the state of their PRs, asks which ones are blocked, mentions conflicts across several PRs, or asks to repair a stack of dependent PRs. Read-only: it proposes, it never merges, rebases or force-pushes on its own.
 argument-hint: [repo-owner/repo-name]
 ---

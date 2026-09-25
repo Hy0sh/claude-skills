@@ -16,7 +16,7 @@ No setup step. Before step 3, work out each role below from what the repository 
 
 | Role | Project skill, when one covers it | Otherwise |
 |---|---|---|
-| Runtime recette | a skill whose description covers driving the app or checking a ticket against the running app | **ask the user** at GATE 1: a skill to follow, or a description (URL, accounts, how to log in, the path to walk) |
+| Acceptance check | a skill whose description covers driving the app or checking a ticket against the running app | **ask the user** at GATE 1: a skill to follow, or a description (URL, accounts, how to log in, the path to walk) |
 | Mergeability gates | a skill whose description covers reproducing the CI locally | read `.github/workflows/*.yml` (or `.gitlab-ci.yml`) and run the steps the diff can break |
 | Commits and PR | a skill whose description covers commits or pull requests | **ask the user** at GATE 1: a skill to follow, or a description (commit format, PR title and body, draft or not). Offer what the history shows as the default answer: the shape of the last 20 commits, `.github/pull_request_template.md` if present, else the bodies of recent PRs |
 | Base branch | — | `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name` |
@@ -27,16 +27,16 @@ Project skills are the ones listed in the session under their bare name, from th
 
 ### Remembered answers
 
-The recette and the commits-and-PR questions are asked once per repository. The answers live outside the plugin, in the user's per-repository folder, where a plugin update cannot overwrite them:
+The acceptance and the commits-and-PR questions are asked once per repository. The answers live outside the plugin, in the user's per-repository folder, where a plugin update cannot overwrite them:
 
 ```
-~/.config/hy0sh-skills/repos/<owner>/<repo>/recette.md
+~/.config/hy0sh-skills/repos/<owner>/<repo>/acceptance.md
 ~/.config/hy0sh-skills/repos/<owner>/<repo>/commits.md
 ```
 
 `<owner>/<repo>` is `gh repo view --json nameWithOwner --jq .nameWithOwner`. A file holds either one line `skill: <name>` or the user's description, verbatim. It wins over a project skill found by its description: the user chose it.
 
-File present → use it and name it in the report (`recette : recette.md`), no question. File absent and no project skill → ask at GATE 1, then write the answer to that file once the user has given it. A correction the user makes at GATE 1 overwrites the file.
+File present → use it and name it in the report (`acceptance: acceptance.md`), no question. File absent and no project skill → ask at GATE 1, then write the answer to that file once the user has given it. A correction the user makes at GATE 1 overwrites the file.
 
 ## Checklist
 
@@ -49,7 +49,7 @@ File present → use it and name it in the report (`recette : recette.md`), no q
 - [ ] 4. Worktree + stack, then Jira in progress + assign
 - [ ] 5. Plan in milestones            → GATE 2
 - [ ] 6. Implementation, one sonnet subagent per milestone
-- [ ] 7. Runtime recette
+- [ ] 7. Acceptance check
 - [ ] 8. CI gates                      → GATE 3 (commits) → GATE 4 (Studio write-back, then PR)
 ```
 
@@ -118,7 +118,7 @@ Locate the technical surface: which layers, front or back, migrations or not. Th
 - a business rule or a locked decision read at step 2 bis that contradicts the ticket, or a `QO-XXX` still open on exactly the point the ticket asks you to settle
 - anything the ticket needs that lives outside the application code (Helm, Ansible, cluster env)
 
-Report: verdict, retained scope, **min/max range plus a risk level**, open questions, and the roles worked out in "What the project provides". When no project skill covers the runtime recette, or the commits and PR, the report ends on those questions: for each, a skill to follow or a description.
+Report: verdict, retained scope, **min/max range plus a risk level**, open questions, and the roles worked out in "What the project provides". When no project skill covers the acceptance check, or the commits and PR, the report ends on those questions: for each, a skill to follow or a description.
 
 **GATE 1.** NO-GO on an ambiguous ticket, missing criteria, or a conflict with a locked decision. Say what is missing, where the conflict is, and which question the PO must answer. Then stop: no branch, no worktree, nothing written to Jira. A NO-GO is a deliverable, not a failure.
 
@@ -168,9 +168,9 @@ One subagent per milestone, `model: sonnet`, with a checkpoint between milestone
 
 Every agent works in the worktree, against its stack. Never `docker compose restart/stop/up/down` on a shared service, never mutate the main database.
 
-## 7. Runtime recette
+## 7. Acceptance check
 
-Follow the recette settled at GATE 1 — the project skill, or the user's description — with the worktree's ports. Green tests are not proof: the expected behaviour has to be observed on the real surface.
+Follow the acceptance check settled at GATE 1 — the project skill, or the user's description — with the worktree's ports. Green tests are not proof: the expected behaviour has to be observed on the real surface.
 
 Before concluding, check the stack actually serves this code — grep a symbol written in step 6 from inside the container:
 
@@ -190,9 +190,9 @@ Captures go in `~/Desktop/<branch slug>/` — the branch name without its `feat/
 
 The folder keys on the branch and not on the ticket, because one ticket can ship several pull requests and each needs its own captures; the branch is the only identifier that is 1:1 with the PR and already known when the captures are taken.
 
-### When the recette was a description
+### When the acceptance check was a description
 
-The user described how to check the ticket because the project has no recette skill. Add the traps met on the way to `recette.md`, so the next ticket starts from them. That file is the user's alone: once the recette is green, offer — once, without insisting — to turn it into a project skill under `.claude/skills/`, which the rest of the team would get too. It is the user's call, and it goes in its own commit, never in this ticket's diff unless they say so.
+The user described how to check the ticket because the project has no acceptance skill. Add the traps met on the way to `acceptance.md`, so the next ticket starts from them. That file is the user's alone: once the check is green, offer — once, without insisting — to turn it into a project skill under `.claude/skills/`, which the rest of the team would get too. It is the user's call, and it goes in its own commit, never in this ticket's diff unless they say so.
 
 ## 8. CI gates, commits, PR
 
@@ -226,7 +226,7 @@ Then name in the gate report which Studio files moved and which identifiers were
 ## Never
 
 - Commit, push or open a PR without an explicit go at gates 3 and 4
-- Merge, transition the ticket to a done status, or post a recette comment unasked
+- Merge, transition the ticket to a done status, or post an acceptance comment unasked
 - Run `wtm remove` or delete the worktree: the cleanup is the user's
 - Declare the ticket done because the tests or the CI gates are green
 - Touch a shared stack, a shared database, or anything but local
