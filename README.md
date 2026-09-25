@@ -11,6 +11,8 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | `dailysum` | Portion personnelle du daily sum collaboratif (commits du jour, enrichissement PR/Jira) à coller dans Slack |
 | `veille-pr` | État de mes PR ouvertes en une passe (conflits, CI, fils de review non résolus, piles), puis liste d'actions ordonnée. Lecture seule |
 | `pr-review-slack` | Annonce d'une PR sur le canal Slack du projet pour demander une review. La table repo → canal vit dans `~/.config/hy0sh-skills/slack-channels.json` |
+| `jira-read` | Lecture de Jira : clé du ticket depuis la branche, les commits ou la PR, ticket complet avec commentaires, recherche JQL. acli d'abord, MCP Atlassian en secours. Lecture seule |
+| `point-sprint` | Mes tickets Jira confrontés à l'état réel du code (PR mergées, ouvertes, en draft) : statuts faux, tickets libres dans mes épics, prochain ticket à prendre. Lecture seule |
 
 Le plugin installe aussi trois hooks : le chargement de la skill `wtm` à l'ouverture
 d'une session dans un projet enregistré, doublé d'un rappel d'adoption quand le
@@ -39,6 +41,8 @@ cp -R skills/wtm ~/.claude/skills/
 cp -R skills/dailysum ~/.claude/skills/
 cp -R skills/veille-pr ~/.claude/skills/
 cp -R skills/pr-review-slack ~/.claude/skills/
+cp -R skills/jira-read ~/.claude/skills/
+cp -R skills/point-sprint ~/.claude/skills/
 ```
 
 ## Structure
@@ -63,6 +67,10 @@ claude-skills/
     │   └── SKILL.md
     ├── veille-pr/
     │   └── SKILL.md
-    └── pr-review-slack/
+    ├── pr-review-slack/
+    │   └── SKILL.md
+    ├── jira-read/
+    │   └── SKILL.md
+    └── point-sprint/
         └── SKILL.md
 ```
