@@ -28,14 +28,18 @@ main :
 | `acceptance.md` | `ticket-to-pr` | `skill: <nom>`, ou le descriptif de la recette runtime |
 | `commits.md` | `ticket-to-pr` | `skill: <nom>`, ou la convention de commits et de PR |
 
-Le plugin installe aussi trois hooks : le chargement de la skill `wtm` à l'ouverture
+Le plugin installe aussi quatre hooks : un index des skills du plugin, une ligne par
+skill lue dans son `SKILL.md`, remis au modèle à chaque ouverture de session parce que
+Claude Code retire les descriptions de sa liste de skills quand elle devient trop longue ;
+le chargement de la skill `wtm` à l'ouverture
 d'une session dans un projet enregistré, doublé d'un rappel d'adoption quand le
 worktree est un que `wtm` ne connaît pas ; un garde-fou qui refuse un `wtm create`
 depuis une session isolée par Claude Code, dont les éditions n'atteindraient jamais le
 worktree créé, et demande l'accord avant une commande Docker qui viserait la stack du
 checkout principal depuis un worktree ; et un `wtm clean -y` détaché en fin de session,
-après que Claude Code a supprimé son worktree. Ils sortent sans rien faire hors projet
-`wtm`, ou si `wtm`, `jq` ou docker manquent.
+après que Claude Code a supprimé son worktree. Les trois hooks `wtm` sortent sans rien
+faire hors projet `wtm`, ou si `wtm`, `jq` ou docker manquent ; l'index, seulement si
+`jq` manque.
 
 ## Installation
 
@@ -69,6 +73,7 @@ claude-skills/
 │   └── plugin.json        # métadonnées du plugin
 ├── hooks/
 │   ├── hooks.json         # PreToolUse, SessionStart et SessionEnd
+│   ├── skills-index       # une ligne par skill du plugin, remise au modèle au démarrage
 │   ├── wtm-context        # charge la skill wtm, et signale un worktree non adopté
 │   ├── wtm-guard          # refuse un `wtm create` depuis une session isolée par Claude
 │   │                      # Code, demande l'accord sur un docker qui viserait la mauvaise stack

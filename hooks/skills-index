@@ -1,0 +1,33 @@
+#!/bin/sh
+# Claude Code drops skill descriptions from its listing once the listing grows past a
+# budget, and the skills of a plugin installed last are the first to lose theirs: the
+# model then sees a bare name it has no reason to pick. This hands it one line per skill
+# of the plugin, read from the SKILL.md files at every session so it never drifts.
+set -u
+
+command -v jq >/dev/null 2>&1 || exit 0
+root=$(CDPATH= cd "$(dirname "$0")/.." 2>/dev/null && pwd) || exit 0
+plugin=$(jq -r .name "$root/.claude-plugin/plugin.json" 2>/dev/null) || exit 0
+
+# One line per skill: the frontmatter description, whether written on one line or as a
+# folded block (`description: >`) continued on indented lines.
+index=$(for f in "$root"/skills/*/SKILL.md; do
+  awk -v p="$plugin" '
+    NR == 1 && $0 == "---" { fm = 1; next }
+    fm && $0 == "---" { exit }
+    fm && /^name:/ { sub(/^name:[ ]*/, ""); name = $0; next }
+    fm && /^description:/ {
+      sub(/^description:[ ]*/, "")
+      if ($0 ~ /^[>|]-?$/) { block = 1; desc = "" } else { desc = $0 }
+      next
+    }
+    fm && block && /^[ ]+/ { sub(/^[ ]+/, ""); desc = (desc == "" ? $0 : desc " " $0); next }
+    fm && block { block = 0 }
+    END { if (name != "" && desc != "") printf "- %s:%s — %s\n", p, name, desc }
+  ' "$f"
+done)
+[ -n "$index" ] || exit 0
+
+jq -nc --arg i "$index" --arg p "$plugin" \
+  '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:(
+     "Skills of the " + $p + " plugin, with what each one is for. The skill listing may show some of them by name only; these descriptions are the ones to match a request against:\n\n" + $i)}}'
