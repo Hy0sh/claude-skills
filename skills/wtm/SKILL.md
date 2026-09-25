@@ -14,7 +14,7 @@ description: >
 argument-hint: [setup]
 ---
 
-When communicating with the user (questions, status, summaries), write in French.
+When communicating with the user (questions, status, summaries), write in their language.
 Keep commands, paths and technical identifiers unchanged.
 
 ## Never install anything on your own
@@ -417,7 +417,7 @@ mounts. On an adopted worktree `wtm remove` takes them back out itself, the port
 in `.env` included, so the checkout is left as it was found. On an older wtm they show
 up as untracked, so stage explicit paths rather than everything.
 
-## Discipline §3 — isolation (workflow-rules)
+## Isolation discipline
 
 Once a project is managed by `wtm`, the shared stack and the worktree stacks are two
 different things and must stay that way.
@@ -443,7 +443,7 @@ different things and must stay that way.
   database being worked in is never clobbered. Do not edit either by hand;
   `wtm backup refresh` regenerates it.
 
-## Discipline §4 — runtime proof
+## Runtime-proof discipline
 
 Green tests do not prove observable behaviour. Before calling anything green:
 

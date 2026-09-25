@@ -4,11 +4,11 @@ description: Review a GitHub pull request and provide structured, actionable fee
 argument-hint: [pr-number]
 ---
 
-This skill is **read-only end to end**. It writes nothing to GitHub: not a comment, not a reply, not a review verdict, not an approval. It produces the structured review and ready-to-post drafts, and the reviewer posts by hand — see the dedicated section for why that is a team rule and not a limitation. The only writes it may perform are local and to its own workspace: the worktree and stack it sets up to observe behaviour, and the scratchpad files it writes for itself.
+This skill is **read-only end to end**. It writes nothing to GitHub: not a comment, not a reply, not a review verdict, not an approval. It produces the structured review and ready-to-post drafts, and the reviewer posts by hand — see the dedicated section for why that is deliberate and not a limitation. The only writes it may perform are local and to its own workspace: the worktree and stack it sets up to observe behaviour, and the scratchpad files it writes for itself.
 
-All outputs MUST be written in French.
+All outputs MUST be written in the user's language.
 
-- Use clear, professional French.
+- Use clear, professional wording.
 - Keep code, file paths, and technical identifiers in their original language (e.g., English).
 - Do not translate code snippets.
 
@@ -71,7 +71,7 @@ No comments from the reviewer: **first pass**, proceed normally.
 Comments already there: **re-review**. Three things change.
 
 1. **Narrow the diff range.** Take the most recent `original_commit_id` among those comments — that is the head that was last reviewed. Read `git diff <last-reviewed-sha>...HEAD` instead of `git diff origin/<baseRefName>...HEAD`. If that SHA is no longer reachable (the branch was rebased or force-pushed since), say so and fall back to the full range rather than guessing.
-2. **Account for the standing findings first.** For each existing comment, state whether it is **traité**, **partiellement traité** or **non traité**, with the line of code that settles it. This comes before any new finding: the reviewer's first question on a second pass is always what happened to the previous round.
+2. **Account for the standing findings first.** For each existing comment, state whether it is **addressed**, **partly addressed** or **not addressed**, with the line of code that settles it. This comes before any new finding: the reviewer's first question on a second pass is always what happened to the previous round.
 3. **Reuse the environment.** If `wtm list` already knows `<headRefName>`, `wtm start` plus the resync from route A is enough — do not `wtm create` a second stack. Building nine containers again for a three-file follow-up is the single most expensive mistake this skill can make.
 
 The severity gate, the runtime-proof requirement and the drafting rules apply unchanged to whatever new findings the narrowed range turns up.
@@ -92,9 +92,9 @@ If at any point the user says "you didn't pull" / "the code is outdated" / "I pu
 
 Once you are confirmed on the PR head, review the PR **yourself, inline, in this single agent**. Do **not** use the Workflow tool and do **not** spawn review subagents (Agent/Task): the whole review runs in the main agent against the checked-out PR branch. Fan-out re-pays the full context for every agent spawned and is the dominant token cost; a single-context review is far cheaper and loses no rigor at the PR sizes seen here.
 
-Proceed dimension by dimension, covering only the ones the diff actually touches, from: *Backend logic & security*, *Frontend*, *Tests & coverage*, *Code quality & i18n*. For each dimension, read the relevant files from the PR branch (use `git diff origin/<baseRefName>...HEAD -- <path>` to see the exact changes) and collect findings with: `severity` (blocker | major | suggestion | positive), `file` (path:line), `snippet`, `explanation`, `suggestion` — all human-readable text in French.
+Proceed dimension by dimension, covering only the ones the diff actually touches, from: *Backend logic & security*, *Frontend*, *Tests & coverage*, *Code quality & i18n*. For each dimension, read the relevant files from the PR branch (use `git diff origin/<baseRefName>...HEAD -- <path>` to see the exact changes) and collect findings with: `severity` (blocker | major | suggestion | positive), `file` (path:line), `snippet`, `explanation`, `suggestion` — all human-readable text in the user's language.
 
-**Self-verify every blocker and major before reporting it.** For each, re-read the real code and trace the full flow (e.g. frontend → backend) while actively trying to **refute your own finding**: is it already neutralised upstream? a misread of the base branch? an i18n "missing key" that pluralisation resolves? Drop refuted findings, and surface notable ones in a short "faux positifs écartés" note so the author sees what was considered and dismissed. Dedupe findings that recur across dimensions. Suggestions and positives need no verification.
+**Self-verify every blocker and major before reporting it.** For each, re-read the real code and trace the full flow (e.g. frontend → backend) while actively trying to **refute your own finding**: is it already neutralised upstream? a misread of the base branch? an i18n "missing key" that pluralisation resolves? Drop refuted findings, and surface notable ones in a short "dismissed false positives" note so the author sees what was considered and dismissed. Dedupe findings that recur across dimensions. Suggestions and positives need no verification.
 
 The static trace is the **prerequisite**, not the proof. Every trace rests on at least one implicit assumption about the framework or the runtime ("the component does not remount when the search changes", "this middleware runs before that one"), and a wrong assumption at blocker/major severity hands the author the cost of the verification. So a finding only keeps that severity once it has been **observed at runtime** — see the runtime-confirmation section below.
 
@@ -113,7 +113,7 @@ Isolation is the hard limit, not the effort. **Never** touch the shared stack, a
 
 **A hand-rolled `docker run` is not that equivalent, and neither is a probe that reconstructs the input by hand.** Both are the standard way this discipline gets quietly dropped: the container is isolated, so it feels compliant, but a probe that imports one module and feeds it a literal you wrote yourself only observes the half of the chain you already believed. It proves "*if* this value arrives here, the output is wrong" — never that the value arrives. That is a static trace with extra steps, and it must be labelled as one. Drive the endpoint, the command, or the screen, on the stack from the setup step.
 
-**State the evidence level of each blocker/major**, in one clause: "confirmé au runtime (capture)" vs "confirmé par le test X, vert en CI" vs "confirmé par une sonde". Never present a static trace as if it were observed. **A finding that runtime did not confirm is not a blocker or a major** — either the trace was wrong and it goes away, or it stays as a suggestion saying plainly what could not be observed. Say what you observed and how; when the runtime check is genuinely out of reach (no stack for this project, an environment you cannot reproduce), say that too, and downgrade rather than announce.
+**State the evidence level of each blocker/major**, in one clause: "confirmed at runtime (screenshot)" vs "confirmed by test X, green in CI" vs "confirmed by a probe". Never present a static trace as if it were observed. **A finding that runtime did not confirm is not a blocker or a major** — either the trace was wrong and it goes away, or it stays as a suggestion saying plainly what could not be observed. Say what you observed and how; when the runtime check is genuinely out of reach (no stack for this project, an environment you cannot reproduce), say that too, and downgrade rather than announce.
 
 Suggestions and positives need no run: they cost the author nothing to dismiss.
 
@@ -188,14 +188,14 @@ for pr in $(gh search prs --repo "$repo" --commenter "$me" --limit 30 --json num
 done | head -40
 ```
 
-If no samples come back, fall back to a concise, collaborative-colleague tone. Otherwise reproduce whatever you observe: tutoiement vs vouvoiement, `→` for the concrete consequence, `file:line` in backticks.
+If no samples come back, fall back to a concise, collaborative-colleague tone. Otherwise reproduce whatever you observe: informal vs formal address, `→` for the concrete consequence, `file:line` in backticks.
 
 **Then apply this cap on top of the sampled voice — it overrides anything the samples suggest:**
 
 - **Two to three sentences, 110 to 500 characters.** Structure is problem → consequence (`→`), no preamble. End on the technical fact.
-- **No closing question, no trailing `stp`.** Interrogative endings were removed by hand on 2026-07-13 and again on 2026-08-17; do not reintroduce them.
-- **Do not hand over the solution when it is trivial.** A `&&` to flip to `||`, a key to rename, an argument to add: name the defect and its consequence, the author concludes. Writing the fix is condescending and pads the thread. A fix sentence survives only when it carries a choice the author could not guess — the kind of "À déplacer dans `bookings.vehicles.index.tsx`" that names a destination.
-- **Runtime evidence does not go in the comment.** Screenshots, console traces and repro scenarios stay in the conversation: they exist to settle severity with the reviewer, not to fill the thread. On one PR, nine "Vérifié en local : …" paragraphs were deleted by hand from nine posted threads.
+- **No closing question, no trailing "please".** Interrogative endings get removed by hand before posting; do not introduce them.
+- **Do not hand over the solution when it is trivial.** A `&&` to flip to `||`, a key to rename, an argument to add: name the defect and its consequence, the author concludes. Writing the fix is condescending and pads the thread. A fix sentence survives only when it carries a choice the author could not guess — the kind of "Move it to `bookings.vehicles.index.tsx`" that names a destination.
+- **Runtime evidence does not go in the comment.** Screenshots, console traces and repro scenarios stay in the conversation: they exist to settle severity with the reviewer, not to fill the thread. A "Checked locally: …" paragraph is exactly what gets deleted by hand from a posted thread.
 - **Zero to one emoji**, ideally none. Never `😅🙏` in series.
 
 **Anchoring rule (matters when the reviewer posts).** An inline comment must attach to a line **present in the PR diff**. If the line you want to flag is *not* in the diff (e.g. an unchanged call site that should have been touched), anchor on the nearest added/changed line in the same hunk that is thematically related, and reference the true line number in the comment text. Compute the final-file line number from the diff hunk header (`@@ -a,b +c,d @@`).
@@ -204,9 +204,9 @@ If no samples come back, fall back to a concise, collaborative-colleague tone. O
 
 **This skill performs no mutation at all.** It produces the structured review and the drafts, and stops there. The reviewer reads them, rewrites them in their own words, and posts them by hand.
 
-The reason is a team rule, not a technical limit. Since 2026-08-27 the user's team runs an experiment that **bans AI-generated review comments**: using an LLM to help read a diff stays fine, but the reviewer must do their own pass and rewrite anything generated before it reaches the PR. A comment posted from here lands under the reviewer's account, so it falls squarely under that ban.
+The reason is a rule, not a technical limit. A comment posted from here lands under the reviewer's account, so it must be the reviewer's own words: using an LLM to help read a diff is fine, but the reviewer does their own pass and rewrites anything generated before it reaches the PR. Many teams go further and ban AI-generated review comments outright.
 
-**The ban covers replies too**, extended on 2026-09-09: three replies posted through `gh api .../comments/<id>/replies` had to be taken down. When a review comes in, analyse it, verify it, measure if needed, then list the response material in conversation — the point raised, what is true or false in it, the numbers, what was fixed — and let the reviewer write and post.
+**The rule covers replies too**: a reply posted through `gh api .../comments/<id>/replies` is a comment under the reviewer's name like any other. When a review comes in, analyse it, verify it, measure if needed, then list the response material in conversation — the point raised, what is true or false in it, the numbers, what was fixed — and let the reviewer write and post.
 
 So: present the drafts, say which file and which line each one anchors to, and stop. Do not offer to post them, and do not propose the `gh api` command that would.
 

@@ -1,6 +1,6 @@
 ---
 name: dailysum
-description: Génère ta portion du daily sum collaboratif (travail mené aujourd'hui) à coller dans le Canvas Slack client. Utiliser quand l'utilisateur demande son daily, dailysum, résumé des travaux du jour, ou récap journalier projet.
+description: Generate the user's own portion of a collaborative daily sum (the work done today), to paste into the team's Slack Canvas. Use when the user asks for their daily, dailysum, a summary of today's work or a daily project recap, in any language ("mon daily", "résumé des travaux du jour").
 argument-hint: [YYYY-MM-DD]
 ---
 
@@ -10,12 +10,12 @@ The output is **your portion only** of a collaborative daily sum: a short list o
 
 ## Reference style (target output)
 
-Bullets are short, in natural French, one per work item (PR / chantier). The Jira key leads the line when the chantier has one, state appended when in progress:
+Bullets are short, in the user's natural language, one per work item (a PR, or a branch or ticket without one). The Jira key leads the line when the work item has one, state appended when in progress. The examples in this file are in English; every bullet, state word and label is written in the user's language:
 
 ```
-* ABCTMA-15 fiabilisation de l'import des fichiers volumineux
-* nettoyage des tables reliquats, garde-fou de schéma et fiabilisation du seed
-* ABC-686 Début de la configuration des créneaux d'un service, en cours
+* ABCTMA-15 hardening the import of large files
+* cleanup of leftover tables, schema guard and seed hardening
+* ABC-686 Start of a service's slot configuration, in progress
 ```
 
 No PR numbers, no commit hashes, no stats — the Jira key is the only identifier that appears, and only at the start of the line. The conventional-commit prefix (`feat:`, `chore:`, `refactor(scope):`) is stripped. Audience is **technical but synthetic**.
@@ -26,7 +26,7 @@ Use the date passed as `$ARGUMENTS` if present (format `YYYY-MM-DD`), otherwise 
 
 ## Collect (the signal is *commits authored today*, not PRs merged today)
 
-A PR merged today whose real work predates today must **not** appear. A chantier started today with no PR yet **must** appear. So drive off commits, then enrich with PR titles and Jira labels.
+A PR merged today whose real work predates today must **not** appear. A work item started today with no PR yet **must** appear. So drive off commits, then enrich with PR titles and Jira labels.
 
 Run these from the current repo. The `.git` is shared across worktrees, so `--all` captures every worktree's branches.
 
@@ -46,7 +46,7 @@ Run these from the current repo. The `.git` is shared across worktrees, so `--al
 
    The `--all` walk also surfaces `refs/stash` entries (commit subjects starting with `index on <branch>: ...` or `WIP on <branch>: ...`) — these are stash artifacts, not real work; drop them before synthesizing bullets.
 
-3. **Active worktree branches** (to catch WIP chantiers that have no PR — e.g. a freshly started ticket):
+3. **Active worktree branches** (to catch WIP work items that have no PR — e.g. a freshly started ticket):
    ```bash
    git worktree list
    ```
@@ -58,7 +58,7 @@ Run these from the current repo. The `.git` is shared across worktrees, so `--al
    ```
    Match PRs to today's commits by `headRefName` (the branch the commits live on). Use the PR title for the clean wording; use its `state` for the work state (see below).
 
-5. **Jira keys** — match `\b[A-Z][A-Z0-9]+-\d+\b` (any Jira key: a client often has two projects, `ABC` and `ABCTMA`, and a pattern built on one prefix silently misses every key of the other) in commit messages, PR titles and branch names. A chantier's key is what opens its bullet, so this step is not optional enrichment. Extract, dedupe, then fetch each via the Atlassian MCP tool `getJiraIssue` (load it through ToolSearch: `select:mcp__claude_ai_Atlassian__getJiraIssue`) to phrase the `Début <KEY> ...` items. If the MCP tool is unavailable, keep the key anyway and phrase from the PR title.
+5. **Jira keys** — match `\b[A-Z][A-Z0-9]+-\d+\b` (any Jira key: a client often has two projects, `ABC` and `ABCTMA`, and a pattern built on one prefix silently misses every key of the other) in commit messages, PR titles and branch names. A work item's key is what opens its bullet, so this step is not optional enrichment. Extract, dedupe, then fetch each via the Atlassian MCP tool `getJiraIssue` (load it through ToolSearch: `select:mcp__claude_ai_Atlassian__getJiraIssue`) to phrase the `<KEY> Start of ...` items. If the MCP tool is unavailable, keep the key anyway and phrase from the PR title.
 
 6. **PRs you reviewed today** (a count, not a list). Get your GitHub login, then count the distinct PRs on which you submitted at least one review today:
    ```bash
@@ -73,23 +73,23 @@ Run these from the current repo. The `.git` is shared across worktrees, so `--al
    done
    echo "PRs reviewed today: $count"
    ```
-   Two gotchas: handle a null `submitted_at` (pending reviews) with `// ""` exactly as above — otherwise `startswith` errors, jq exits non-zero, and the count silently reads 0. And `submitted_at` is UTC: a review submitted late evening Paris time lands on the next UTC day — close enough for a daily count, but note it if a review seems missing.
+   Two gotchas: handle a null `submitted_at` (pending reviews) with `// ""` exactly as above — otherwise `startswith` errors, jq exits non-zero, and the count silently reads 0. And `submitted_at` is UTC: a review submitted late evening local time lands on the next UTC day — close enough for a daily count, but note it if a review seems missing.
 
 ## Synthesize the bullets
 
-- **One bullet per chantier** (PR or branch/ticket), not per commit. Fold multiple commits on the same branch into a single bullet.
+- **One bullet per work item** (PR or branch/ticket), not per commit. Fold multiple commits on the same branch into a single bullet.
 - **Wording:** take the PR title, strip the conventional-commit prefix (`type(scope): `) and the trailing key suffix (` #ABC-123`, ` (ABC-123)`).
-- **Key first:** when the chantier has a Jira key, the bullet opens with it — `* ABC-666 retrait d'un membre du dossier par un agent`. One key per bullet; when a chantier carries several, keep the one its PR title names. A chantier with no key keeps the plain wording.
+- **Key first:** when the work item has a Jira key, the bullet opens with it — `* ABC-666 an agent removing a member from a case`. One key per bullet; when a work item carries several, keep the one its PR title names. A work item with no key keeps the plain wording.
 - **State suffix** (heuristic — the user will correct it):
   - PR merged on the target day → no state suffix.
-  - PR open, or branch with today's commits but no merged PR → append `, en cours`.
-  - Brand-new branch with only today's first commits and no PR → `Début ` right after the key (`* ABC-666 Début de la validation ...`), or opening the bullet when there is no key, and append `, en cours`.
+  - PR open, or branch with today's commits but no merged PR → append `, in progress`.
+  - Brand-new branch with only today's first commits and no PR → `Start of ` right after the key (`* ABC-666 Start of the validation ...`), or opening the bullet when there is no key, and append `, in progress`.
 - **Exclude** purely administrative noise with no client value (e.g. a token/secret rotation bump) unless it was the day's actual work. When unsure, keep it.
-- Keep it French, technical, synthetic. No PR numbers, no hashes — the Jira key is the only identifier. The **only** count allowed is the reviews line (see Output).
-- **Reviews line:** when the review count from step 6 is ≥ 1, append a final bullet `* N PR reviewées` (`* 1 PR reviewée` for a single one). Omit the bullet entirely when the count is 0.
+- Keep it in the user's language, technical, synthetic. No PR numbers, no hashes — the Jira key is the only identifier. The **only** count allowed is the reviews line (see Output).
+- **Reviews line:** when the review count from step 6 is ≥ 1, append a final bullet `* N PRs reviewed` (`* 1 PR reviewed` for a single one). Omit the bullet entirely when the count is 0.
 
 ## Output
 
-Print **the bullets only** (no `@François B.` header line — the user's name line is already in the Canvas template), inside a fenced code block so it is clean to copy-paste. The chantier bullets come first, then the `* N PR reviewées` bullet last (when ≥ 1). Then add one line outside the block reminding the user to review the guessed `, en cours` / `en relecture` states before pasting into the Slack Canvas.
+Print **the bullets only** (no header line with the user's name — it is already in the Canvas template), inside a fenced code block so it is clean to copy-paste. The work item bullets come first, then the `* N PRs reviewed` bullet last (when ≥ 1). Then add one line outside the block reminding the user to review the guessed `, in progress` / `in review` states before pasting into the Slack Canvas.
 
 If `gh` or Jira is unavailable, say so briefly and produce the best draft from the sources that did respond — never fail outright.
