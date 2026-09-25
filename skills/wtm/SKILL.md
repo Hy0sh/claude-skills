@@ -136,6 +136,8 @@ running. What the sections below describe then arrived version by version:
 - **0.18.0** — the `project create` / `project edit` walk offers what the project
   already says as defaults, flags a migrations pathspec matching no tracked file, and
   saves nothing until the user confirms a closing summary.
+- **0.19.0** — `wtm ports <branch>` prints the addresses `start` printed, one service
+  per line, for a stack you were handed rather than started.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -170,6 +172,7 @@ wtm adopt --as feat/my-branch            # renaming the branch on the way in
 wtm adopt my-app worktree-curry -y       # named from anywhere, nothing asked
 
 wtm list                                 # INDEX / BRANCH / STATUS / PATH, adoptable ones included
+wtm ports feat/my-branch                 # service  address, one per line: what start printed
 wtm start feat/my-branch                 # bring a stopped stack back up
 wtm stop feat/my-branch                  # stop the stack, keep the worktree
 wtm stop --all                           # every worktree of the project
@@ -211,7 +214,8 @@ it, `create` fetching first in case it was pushed since the last fetch. So do no
 `git fetch` and `git branch` by hand before creating a worktree on someone else's
 branch: `wtm create <branch>` is the whole thing, and it errors out instead of
 guessing when two remotes carry that name. Allocated ports are printed on
-`create`/`start`; `wtm list` also reports whether each stack is up, and prints `-`
+`create`/`start`, and `wtm ports <branch>` prints them again for a stack started by
+someone else (`wtm ports feat/x | awk '/^api/{print $2}'`); `wtm list` also reports whether each stack is up, and prints `-`
 instead of hanging when Docker is slow or down.
 
 Creation only happens behind the `create` verb. Any unknown word is rejected rather
@@ -454,7 +458,7 @@ wtm exec feat/my-branch -- grep -r "MyNewSymbol" /app | head -3
 
 If it does not (stale image, mount missing), stop and diagnose instead of concluding.
 Then produce the real observation on the worktree's own remapped ports, taken from
-`wtm list` or the `start` output: response body, screenshot, terminal output. Never
+`wtm ports <branch>`: response body, screenshot, terminal output. Never
 observe through the main stack's ports, they serve the other code.
 
 ## Troubleshooting
