@@ -4,7 +4,7 @@ description: Take stock of the user's own open pull requests in one pass — con
 argument-hint: [repo-owner/repo-name]
 ---
 
-Chat with the user in their language; this skill file stays in English.
+Chat with the user in their language, the labels and table headers below included; this skill file stays in English.
 
 This skill answers one question: **which of my open PRs need me right now, and in what order.** It reads, it reports, it proposes. It changes nothing.
 
@@ -55,13 +55,13 @@ A PR whose `baseRefName` is not the repository's default branch sits **on top of
 Two consequences the report must carry:
 
 - **Repair order is bottom-up.** Rebasing the top of a stack while its base is still stale re-creates the conflict one commit later. The PR closest to the default branch goes first, then each one above it.
-- **A merged base is a trap.** When the base PR of a stack has been merged, the PR above it keeps pointing at a branch that no longer moves; GitHub may report it mergeable while its diff still shows the base PR's commits. Flag it as "base mergée, à rebaser sur la branche par défaut", not as healthy.
+- **A merged base is a trap.** When the base PR of a stack has been merged, the PR above it keeps pointing at a branch that no longer moves; GitHub may report it mergeable while its diff still shows the base PR's commits. Flag it as "base merged, rebase onto the default branch", not as healthy.
 
 ## 3. Report
 
 One table, one line per PR, ordered by urgency (blocked first, then waiting on the user, then healthy):
 
-| PR | Titre | Base | Conflit | CI | Fils ouverts | État |
+| PR | Title | Base | Conflict | CI | Open threads | State |
 |---|---|---|---|---|---|---|
 
 Then, underneath, the **ordered action list**, each line naming the exact command the user would run. Group the ones that belong to the same stack and say so. If nothing needs doing, say that in one line rather than padding the report.

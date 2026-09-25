@@ -76,7 +76,7 @@ gh pr list --search 'ABC-1234' --state all --json number,title,state,headRefName
 Jira: `issuelinks` and sub-tasks come from step 1. Add a search on the significant words of the summary, bounded to the ticket's project, to catch the neighbour that shipped already (`jira-read` §4).
 
 ```bash
-acli jira workitem search --jql 'project = ABC AND text ~ "mot mot" ORDER BY updated DESC' \
+acli jira workitem search --jql 'project = ABC AND text ~ "word word" ORDER BY updated DESC' \
   --fields "key,summary,status" --limit 20 --json
 ```
 

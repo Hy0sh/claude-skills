@@ -4,7 +4,7 @@ description: Cross-check the user's assigned Jira tickets against the real state
 argument-hint: [PROJECT-KEY]
 ---
 
-Chat with the user in their language; this skill file stays in English.
+Chat with the user in their language, the labels and table headers below included; this skill file stays in English.
 
 Jira statuses drift because they are updated by hand and the code moves faster. This skill rebuilds the truth from the code, compares it to Jira, and names the gap. It proposes, it does not transition.
 
@@ -35,9 +35,9 @@ Extract the Jira keys from each PR title, body and branch name with the pattern 
 
 **a. Statuses that contradict the code.** The board's status names are read from the search output, every run, and quoted verbatim: a board can gain a status without telling anyone. Place each one on the workflow (not started, in progress, in test) from the order the tickets themselves show, then:
 
-- PR merged, ticket still not started or in progress → statut en retard, il devrait être en test.
-- PR open or draft, ticket still not started → statut en retard, il devrait être en cours.
-- Ticket in progress with no branch, no PR and no commit carrying its key → probablement à repasser en attente, à confirmer avec l'utilisateur.
+- PR merged, ticket still not started or in progress → status behind, it should be in test.
+- PR open or draft, ticket still not started → status behind, it should be in progress.
+- Ticket in progress with no branch, no PR and no commit carrying its key → probably back to waiting, to confirm with the user.
 
 The target status is proposed by its exact name, taken from the ones already in use across the user's tickets, or from the MCP `getTransitionsForJiraIssue` when those are not enough (`jira-read` §5). Never guess one.
 
@@ -55,7 +55,7 @@ No link file: skip it without a word.
 
 ## 4. Report
 
-Three short sections, in that order: statuts à corriger (table: ticket, statut actuel, statut attendu, preuve), tickets libres dans mes épics, prochain ticket proposé. Each row of the first table must carry its evidence — a PR number, a merge date. A proposed correction without evidence does not get listed.
+Three short sections, in that order: statuses to fix (table: ticket, current status, expected status, evidence), free tickets in my epics, proposed next ticket. Each row of the first table must carry its evidence — a PR number, a merge date. A proposed correction without evidence does not get listed.
 
 End with the list of `acli` commands that would apply the corrections, ready to run, and stop there.
 

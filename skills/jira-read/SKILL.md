@@ -27,7 +27,7 @@ Sources, by decreasing authority:
 
 All agreeing, or only one source carrying a key → announce it in one line (`Ticket ABC-1234 — <summary>`) and continue.
 
-Sources disagreeing, or several distinct keys → show in one message what each source gave (`branche : ABC-1234`, `commits : ABC-1234, ABC-1240`, `PR : ABC-1234`) and ask **once**. A branch carrying several keys is normal (a stacked PR): the user picks, or asks for all of them in sequence.
+Sources disagreeing, or several distinct keys → show in one message what each source gave (`branch: ABC-1234`, `commits: ABC-1234, ABC-1240`, `PR: ABC-1234`) and ask **once**. A branch carrying several keys is normal (a stacked PR): the user picks, or asks for all of them in sequence.
 
 Zero keys anywhere → ask.
 
@@ -80,7 +80,7 @@ acli jira workitem search \
 
 ```bash
 acli jira workitem view ABC-1234 --fields 'summary,status,issuetype,parent,updated' --json \
-  | jq -c '{key, summary:.fields.summary, status:.fields.status.name, parent:(.fields.parent.key // "aucun"), updated:(.fields.updated[0:10])}'
+  | jq -c '{key, summary:.fields.summary, status:.fields.status.name, parent:(.fields.parent.key // "none"), updated:(.fields.updated[0:10])}'
 ```
 
 ## 5. Status names
