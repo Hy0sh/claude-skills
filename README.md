@@ -9,6 +9,8 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | `review-pr` | Review structurée et actionnable d'une pull request GitHub |
 | `wtm` | Usage de [worktree-manager](https://github.com/Hy0sh/worktree-manager) : worktree git avec sa stack Docker isolée, plus les disciplines d'isolation et de preuve runtime |
 | `dailysum` | Portion personnelle du daily sum collaboratif (commits du jour, enrichissement PR/Jira) à coller dans Slack |
+| `veille-pr` | État de mes PR ouvertes en une passe (conflits, CI, fils de review non résolus, piles), puis liste d'actions ordonnée. Lecture seule |
+| `pr-review-slack` | Annonce d'une PR sur le canal Slack du projet pour demander une review. La table repo → canal vit dans `~/.config/hy0sh-skills/slack-channels.json` |
 
 Le plugin installe aussi trois hooks : le chargement de la skill `wtm` à l'ouverture
 d'une session dans un projet enregistré, doublé d'un rappel d'adoption quand le
@@ -35,6 +37,8 @@ Copie les dossiers voulus dans `~/.claude/skills/` :
 cp -R skills/review-pr ~/.claude/skills/
 cp -R skills/wtm ~/.claude/skills/
 cp -R skills/dailysum ~/.claude/skills/
+cp -R skills/veille-pr ~/.claude/skills/
+cp -R skills/pr-review-slack ~/.claude/skills/
 ```
 
 ## Structure
@@ -55,6 +59,10 @@ claude-skills/
     │   └── SKILL.md
     ├── wtm/
     │   └── SKILL.md
-    └── dailysum/
+    ├── dailysum/
+    │   └── SKILL.md
+    ├── veille-pr/
+    │   └── SKILL.md
+    └── pr-review-slack/
         └── SKILL.md
 ```

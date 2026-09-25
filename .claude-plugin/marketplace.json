@@ -8,7 +8,7 @@
     {
       "name": "hy0sh-skills",
       "source": "./",
-      "description": "Skills personnels François Bouyer : review-pr, wtm et dailysum"
+      "description": "Skills personnels François Bouyer : review-pr, wtm, dailysum, veille-pr et pr-review-slack"
     }
   ]
 }
