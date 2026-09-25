@@ -3,7 +3,7 @@ name: jira-read
 description: Use when a task needs to read Jira — find which ticket the current branch, commits or PR are about, read a ticket in full with its comments, sub-tasks and links, or search tickets with JQL. The canonical read route (acli first with explicit fields, ADF flattened, Atlassian MCP as fallback) that other skills follow. Read-only.
 ---
 
-Chat with the user in French; this skill file stays in English.
+Chat with the user in their language; this skill file stays in English.
 
 This skill reads Jira and nothing else: no transition, no assignment, no comment. A skill that writes to Jira does it itself, behind its own approval gate.
 

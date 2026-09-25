@@ -4,7 +4,7 @@ description: Take stock of the user's own open pull requests in one pass — con
 argument-hint: [repo-owner/repo-name]
 ---
 
-Chat with the user in French; this skill file stays in English.
+Chat with the user in their language; this skill file stays in English.
 
 This skill answers one question: **which of my open PRs need me right now, and in what order.** It reads, it reports, it proposes. It changes nothing.
 

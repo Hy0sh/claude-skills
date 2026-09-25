@@ -4,7 +4,7 @@ description: Cross-check the user's assigned Jira tickets against the real state
 argument-hint: [PROJECT-KEY]
 ---
 
-Chat with the user in French; this skill file stays in English.
+Chat with the user in their language; this skill file stays in English.
 
 Jira statuses drift because they are updated by hand and the code moves faster. This skill rebuilds the truth from the code, compares it to Jira, and names the gap. It proposes, it does not transition.
 

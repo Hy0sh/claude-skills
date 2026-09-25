@@ -13,7 +13,7 @@ One line in the project channel, nothing else:
 
 Only `PR` is a link, the brackets are plain text. Posting through the API is what keeps the GitHub preview away, so nothing has to be deleted afterwards.
 
-Chat with the user in **French**; this skill file stays in English.
+Chat with the user in their language; this skill file stays in English.
 
 ## Steps
 
