@@ -13,7 +13,7 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | `pr-review-slack` | Annonce d'une PR sur le canal Slack du projet pour demander une review. La table repo → canal vit dans `~/.config/hy0sh-skills/slack-channels.json` |
 | `jira-read` | Lecture de Jira : clé du ticket depuis la branche, les commits ou la PR, ticket complet avec commentaires, recherche JQL. acli d'abord, MCP Atlassian en secours. Lecture seule |
 | `point-sprint` | Mes tickets Jira confrontés à l'état réel du code (PR mergées, ouvertes, en draft) : statuts faux, tickets libres dans mes épics, prochain ticket à prendre. Lecture seule |
-| `work-jira-ticket` | Un ticket Jira mené jusqu'à la PR : antériorité, faisabilité, worktree `wtm`, plan, implémentation par sous-agents, recette, gates, avec quatre portes de validation. S'appuie sur les skills du projet quand il en a, et demande sinon comment recetter et comment committer |
+| `ticket-to-pr` | Un ticket Jira mené jusqu'à la PR : antériorité, faisabilité, worktree `wtm`, plan, implémentation par sous-agents, recette, gates, avec quatre portes de validation. S'appuie sur les skills du projet quand il en a, et demande sinon comment recetter et comment committer |
 
 Le plugin installe aussi trois hooks : le chargement de la skill `wtm` à l'ouverture
 d'une session dans un projet enregistré, doublé d'un rappel d'adoption quand le
@@ -44,7 +44,7 @@ cp -R skills/veille-pr ~/.claude/skills/
 cp -R skills/pr-review-slack ~/.claude/skills/
 cp -R skills/jira-read ~/.claude/skills/
 cp -R skills/point-sprint ~/.claude/skills/
-cp -R skills/work-jira-ticket ~/.claude/skills/
+cp -R skills/ticket-to-pr ~/.claude/skills/
 ```
 
 ## Structure
@@ -75,6 +75,6 @@ claude-skills/
     │   └── SKILL.md
     ├── point-sprint/
     │   └── SKILL.md
-    └── work-jira-ticket/
+    └── ticket-to-pr/
         └── SKILL.md
 ```

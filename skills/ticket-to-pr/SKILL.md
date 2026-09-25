@@ -1,10 +1,10 @@
 ---
-name: work-jira-ticket
+name: ticket-to-pr
 description: Use when taking a Jira ticket from the ticket to the pull request — the user asks to work, take, handle, start or develop a ticket by its key, or asks whether a ticket is feasible and already covered before coding it. Covers prior art, the feasibility verdict, the isolated worktree and its stack, and the four approval gates.
 argument-hint: <TICKET-KEY>
 ---
 
-# Work a Jira ticket end to end
+# Take a Jira ticket to a pull request
 
 Orchestrator: the ticket in, a pull request out. Most steps are delegated — to the `jira-read` and `wtm` skills of this plugin, and to whatever skills the project itself provides. The only new work is prior art, the business rules, the feasibility verdict and the worktree.
 
@@ -44,7 +44,7 @@ A gate means: present, then stop. Waiting for a "go" is the point of the step.
 
 ## 0. Resolve the key
 
-The command argument is the normal source (`/work-jira-ticket ABC-1234`). Branch, commits and PR stay fallbacks. Follow `jira-read` §1: probe every source in one pass, ask once when they disagree, never guess.
+The command argument is the normal source (`/ticket-to-pr ABC-1234`). Branch, commits and PR stay fallbacks. Follow `jira-read` §1: probe every source in one pass, ask once when they disagree, never guess.
 
 ## 1. Read the ticket
 
