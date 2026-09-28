@@ -451,10 +451,10 @@ different things and must stay that way.
 
 - **Never** run a bare `docker compose up/down/restart/stop` for a worktree stack
   from your own shell. Since 0.21.0 the generated `compose.override.yaml` gives it the
-  worktree's project name and ports, which is a net for a human's reflex and not a
-  route: it still skips `.wtm-snapshot.yaml` (the dump, on a first start), reads the
-  port variables that `environment:` interpolates from the versioned `.env`, and on a
-  project with its own override, or an older wtm, it lands on the main stack. Use
+  worktree's project name, ports and dump mount, which is a net for a human's reflex
+  and not a route: it still reads the port variables that `environment:` interpolates
+  from the versioned `.env`, and on a project with its own override, a `.env` setting
+  `COMPOSE_PROJECT_NAME` or `COMPOSE_FILE`, or an older wtm, it lands on the main stack. Use
   `wtm start` / `wtm stop`: they also reprovision what the stack mounts and warn about
   the Docker VM's memory. Through `wtm run` the compose environment is set, so a
   script of the project reaches the right stack with the right files; that is for the
