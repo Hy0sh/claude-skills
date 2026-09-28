@@ -138,6 +138,10 @@ running. What the sections below describe then arrived version by version:
   saves nothing until the user confirms a closing summary.
 - **0.19.0** — `wtm ports <branch>` prints the addresses `start` printed, one service
   per line, for a stack you were handed rather than started.
+- **0.20.0** — a service reached through a reverse proxy states its address in a
+  `wtm.url` compose label, printed as `<service>/url`. A versioned `.env` no longer
+  leaves the port variables at the main stack's values outside `ports:`: wtm passes
+  them in compose's environment, and `wtm run` commands see them too.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -215,7 +219,9 @@ it, `create` fetching first in case it was pushed since the last fetch. So do no
 branch: `wtm create <branch>` is the whole thing, and it errors out instead of
 guessing when two remotes carry that name. Allocated ports are printed on
 `create`/`start`, and `wtm ports <branch>` prints them again for a stack started by
-someone else (`wtm ports feat/x | awk '/^api/{print $2}'`); `wtm list` also reports whether each stack is up, and prints `-`
+someone else (`wtm ports feat/x | awk '$1 == "api" {print $2}'`). A `<service>/url` line is
+the address the project declared for a service behind a proxy (a `wtm.url` label):
+open that one, not the proxy's bare port. `wtm list` also reports whether each stack is up, and prints `-`
 instead of hanging when Docker is slow or down.
 
 Creation only happens behind the `create` verb. Any unknown word is rejected rather
@@ -500,7 +506,9 @@ observe through the main stack's ports, they serve the other code.
   copy.
 - Ports are rebased as `20000 + project offset + default port + worktree index *
   stride`. A project already remapping a port on purpose keeps its mapping, and a
-  git-tracked `.env` is left alone, so starting a stack never dirties the worktree.
+  git-tracked `.env` is left alone, so starting a stack never dirties the worktree:
+  the port variables then reach compose through the environment of wtm's own calls,
+  so a bare `docker compose` misses them. Go through `wtm exec` or `wtm run`.
 
 ---
 
