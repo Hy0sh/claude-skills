@@ -154,6 +154,11 @@ running. What the sections below describe then arrived version by version:
   print them in a `urls` block ahead of the ports. The `wtm.url` label is gone: do
   not add one to a project. A new worktree no longer takes an index whose ports
   another project's worktree already publishes.
+- **0.23.0** — `wtm logs <branch>` follows the stack's logs from the last 200 lines.
+  `wtm tui` is a live dashboard for the user's terminal: it is interactive, never run
+  it yourself, suggest it. An adopted worktree on a detached HEAD, a rebase stopped
+  on a conflict, keeps its branch: `exec`, `env` and `run` reach it, and the
+  SessionEnd `clean -y` no longer takes its stack and database down.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -347,6 +352,8 @@ wtm exec feat/my-branch --service db -- psql -U postgres
 # COMPOSE_FILE pointing at this worktree's stack — for a worktree you are not in
 wtm run feat/my-branch -- git status
 wtm run feat/my-branch -- scripts/some-compose-script.sh
+wtm logs feat/my-branch                  # follows until ctrl+c: for the user (0.23.0);
+wtm run feat/my-branch -- docker compose logs --tail 100 api   # one that returns, for you
 cd $(wtm path feat/my-branch)
 
 # the same environment as export lines, for the user's shell or a direnv .envrc
