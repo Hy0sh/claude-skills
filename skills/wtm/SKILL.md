@@ -149,6 +149,11 @@ running. What the sections below describe then arrived version by version:
   `exec` and `run` take the current worktree's branch when none is given. `create
   --no-start` allocates the index and writes the compose files. A project lists the
   git-ignored files each worktree gets a copy of with `--copy`.
+- **0.22.0** — `start` and `wtm ports` read the addresses a reverse proxy routes to
+  each service (Traefik, nginx-proxy, caddy-docker-proxy, told by their image) and
+  print them in a `urls` block ahead of the ports. The `wtm.url` label is gone: do
+  not add one to a project. A new worktree no longer takes an index whose ports
+  another project's worktree already publishes.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -184,7 +189,7 @@ wtm adopt my-app worktree-curry -y       # named from anywhere, nothing asked
 
 wtm list                                 # INDEX / BRANCH / COMPOSE PROJECT / STATUS / PATH,
                                          # adoptable ones included
-wtm ports feat/my-branch                 # service  address, one per line: what start printed
+wtm ports feat/my-branch                 # service  address, what start printed: urls, then ports
 wtm ports                                # from inside a worktree, its own branch
 wtm start feat/my-branch                 # bring a stopped stack back up
 wtm stop feat/my-branch                  # stop the stack, keep the worktree
@@ -228,10 +233,14 @@ it, `create` fetching first in case it was pushed since the last fetch. So do no
 branch: `wtm create <branch>` is the whole thing, and it errors out instead of
 guessing when two remotes carry that name. Allocated ports are printed on
 `create`/`start`, and `wtm ports <branch>` prints them again for a stack started by
-someone else (`wtm ports feat/x | awk '$1 == "api" {print $2}'`). A `<service>/url` line is
-the address the project declared for a service behind a proxy (a `wtm.url` label):
-open that one, not the proxy's bare port. `wtm list` also reports whether each stack is up, and prints `-`
-instead of hanging when Docker is slow or down.
+someone else (`wtm ports feat/x | awk '$1 == "api" {print $2}'`). Behind Traefik,
+nginx-proxy or caddy-docker-proxy, the output opens with a `urls, through <proxy>`
+block of `<service>/url` lines, then a `ports` block: a `/url` line is the host name
+the proxy routes to that service, on this worktree's proxy port. Open that one, not the
+proxy's bare port, and filter with `awk '$1 == "app/url"'`. A proxy configured from a
+mounted file (a Caddyfile, an `nginx.conf`) shows its ports only, and nothing in the
+project can declare its addresses. `wtm list` also reports whether each stack is up,
+and prints `-` instead of hanging when Docker is slow or down.
 
 Creation only happens behind the `create` verb. Any unknown word is rejected rather
 than silently turned into a branch.
