@@ -82,6 +82,15 @@ acli jira workitem search --jql 'project = ABC AND text ~ "word word" ORDER BY u
 
 Report what each source gave. A branch or a merged commit already carrying this key is announced **before** anything is created, and the user decides whether to continue.
 
+Prior art is also in the code. Before writing a rule, find how the codebase already enforces the same rule or its nearest neighbour (a constraint checked on another screen, a scope applied to a sibling list, a fix just landed on the base for the same kind of defect) and reuse it rather than writing a second version. Search the **up-to-date** base: a branch cut days ago misses the fix a teammate just merged.
+
+```bash
+git fetch origin
+git log --oneline "$(git merge-base HEAD origin/<base>)"..origin/<base> -- <paths the ticket touches>
+```
+
+Name in the report each neighbour found and whether the plan reuses it.
+
 ## 2 bis. Business rules, in the Studio
 
 Only when the repository is linked to a theTribe Studio. The link, `.claude/studio-link.json`, is untracked: from a worktree it is simply absent, and a grep run there returns nothing without saying why. Resolve the main checkout first:
@@ -119,6 +128,16 @@ Locate the technical surface: which layers, front or back, migrations or not. Th
 - anything the ticket needs that lives outside the application code (Helm, Ansible, cluster env)
 
 Report: verdict, retained scope, **min/max range plus a risk level**, open questions, and the roles worked out in "What the project provides". When no project skill covers the acceptance check, or the commits and PR, the report ends on those questions: for each, a skill to follow or a description.
+
+The report also lists the **edge cases** the ticket does not settle, one line each, with the reading you propose. Walk at least:
+
+- a value the rule depends on being unknown or empty (an attribute not filled in yet)
+- the intermediate and terminal states of the objects involved (pending, waiting list, refused, cancelled, archived): which ones count?
+- several of the same at once (several people, several lines, several tenants)
+- what already exists when the change ships: rows created before it, objects already in a state the new rule would forbid
+- who sees and changes it when access is restricted to a subset (scope, tenant, role)
+
+An edge case left unarbitrated is settled silently by whoever codes it. GATE 1 is where the user settles them, not the reviewer.
 
 **GATE 1.** NO-GO on an ambiguous ticket, missing criteria, or a conflict with a locked decision. Say what is missing, where the conflict is, and which question the PO must answer. Then stop: no branch, no worktree, nothing written to Jira. A NO-GO is a deliverable, not a failure.
 
@@ -178,6 +197,22 @@ Before concluding, check the stack actually serves this code — grep a symbol w
 wtm exec fix/ABC-1234-slug -- grep -rn '<symbol just written>' .
 ```
 
+### Prove the neighbour flows, not only the ticket's own
+
+The ticket names one flow; the change also runs through the flows around it, and that is where reviews find the defects the happy path hid. For each row the change matches, observe the neighbour flow once on the real surface, or say why it does not apply:
+
+| The change… | Also prove |
+|---|---|
+| adds a field or a relation to a central object | editing that object afterwards, duplicating or copying it, exporting it |
+| adds a state, a lock or a freeze | every edit still allowed in the locked state, and every edit it must refuse |
+| adds a choice (a level, an option, a price) | several items at once, each getting its own choice |
+| restricts or filters by scope | the view of a user restricted to part of the data |
+| adds a model tied to a person, a permission, or a registry entry | the exhaustive checks the project keeps (anonymisation, permission catalogue, predefined groups) |
+| removes or transforms a field | the rows that exist before the migration |
+| raises a new error | its message on every screen that calls the endpoint |
+
+Proof that covers only the ticket's sentence is the proof the reviewer redoes.
+
 ### Look at every screenshot you take
 
 **Read each image back before using it** — with the `Read` tool on the file, not by trusting the tool that reported writing it. An accessibility snapshot returns clean text whatever the CSS does: it reads the DOM, not the layout. A card whose text wraps one word per line, a pill overflowing its container, a column crushed to nothing, an element buried under an overlay — none of that appears in a snapshot, and all of it ships if the tree was the only thing checked.
@@ -205,6 +240,8 @@ wtm exec fix/ABC-1234-slug --service frontend -- <gate command>
 
 A gate run from the main checkout validates the main tree and reports green for code never tested.
 
+**Check the CI will actually run.** Read the workflow triggers once: a CI filtered on the base branch (`pull_request: branches: [...]`) skips a PR stacked on another feature branch, and GitHub shows "no checks" rather than a failure. On such a PR the local gates are the only net: say so in the report, and add the project's cross-cutting exhaustive tests (registries, catalogues, predefined groups) to the scoped set, since no diff-based selection points at them.
+
 **GATE 3** before any commit, **GATE 4** before the PR, both conducted per the commits-and-PR convention settled at GATE 1 — the project skill, or the user's description. Nothing the convention does not say is added: no format, no signature, no section of your own.
 
 ### Write the decisions back to the Studio
@@ -229,6 +266,7 @@ Then name in the gate report which Studio files moved and which identifiers were
 - Merge, transition the ticket to a done status, or post an acceptance comment unasked
 - Run `wtm remove` or delete the worktree: the cleanup is the user's
 - Declare the ticket done because the tests or the CI gates are green
+- Present a stacked PR as green when no CI ran on it
 - Touch a shared stack, a shared database, or anything but local
 - Rename the branch after the stack exists
 - Keep going past GATE 1 on an ambiguous ticket by picking an interpretation

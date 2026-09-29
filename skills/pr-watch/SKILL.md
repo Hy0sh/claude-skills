@@ -31,6 +31,8 @@ gh pr checks <number> || true
 
 The `|| true` is not optional: `gh pr checks` exits non-zero when a job is pending (8) or failing (1), and both are states this report exists to surface.
 
+**"no checks reported" is a finding, not a pass.** It usually means the workflow triggers exclude this PR's base, typically a PR stacked on another feature branch. Report it in the CI column as `none` and list it among the blocked PRs: it is waiting on a verification that will never come by itself.
+
 Unanswered review threads need GraphQL — the REST comments endpoint does not carry the resolved flag:
 
 ```bash
