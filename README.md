@@ -14,6 +14,7 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | `jira-read` | Lecture de Jira : clé du ticket depuis la branche, les commits ou la PR, ticket complet avec commentaires, recherche JQL. acli d'abord, MCP Atlassian en secours. Lecture seule |
 | `sprint-check` | Mes tickets Jira confrontés à l'état réel du code (PR mergées, ouvertes, en draft) : statuts faux, tickets libres dans mes épics, prochain ticket à prendre. Lecture seule |
 | `ticket-to-pr` | Un ticket Jira mené jusqu'à la PR : antériorité, faisabilité, worktree `wtm`, plan, implémentation par sous-agents, recette, gates, avec quatre portes de validation. S'appuie sur les skills du projet quand il en a, et demande sinon comment recetter et comment committer |
+| `overlapping-prs` | Découpage de PR qui se recoupent (mêmes fichiers, même chaîne de migrations, même code partagé), quel que soit le sujet qui les regroupe, pour qu'elles cessent de se marcher dessus : PR socle d'abord, ordre de merge fixé et pile qui le suit, migration en dernier commit régénérée au merge plutôt que renumérotée. Planifie, ne rebase ni ne pousse |
 
 ## Configuration par repo
 
