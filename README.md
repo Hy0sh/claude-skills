@@ -7,6 +7,7 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | Skill | Description |
 |---|---|
 | `review-pr` | Review structurée et actionnable d'une pull request GitHub |
+| `review-diff` | Méthode de review commune à `review-pr` et `ticket-to-pr`, utilisable seule sur la branche courante sans PR : dimensions, auto-réfutation, severity gate, et confirmation au runtime de chaque blocker et major. Ne modifie pas le code |
 | `wtm` | Usage de [worktree-manager](https://github.com/Hy0sh/worktree-manager) : worktree git avec sa stack Docker isolée, plus les disciplines d'isolation et de preuve runtime |
 | `dailysum` | Portion personnelle du daily sum collaboratif (commits du jour, enrichissement PR/Jira) à coller dans Slack |
 | `pr-watch` | État de mes PR ouvertes en une passe (conflits, CI, fils de review non résolus, piles), puis liste d'actions ordonnée. Lecture seule |
@@ -56,6 +57,7 @@ Copie les dossiers voulus dans `~/.claude/skills/` :
 
 ```bash
 cp -R skills/review-pr ~/.claude/skills/
+cp -R skills/review-diff ~/.claude/skills/
 cp -R skills/wtm ~/.claude/skills/
 cp -R skills/dailysum ~/.claude/skills/
 cp -R skills/pr-watch ~/.claude/skills/
@@ -81,6 +83,8 @@ claude-skills/
 │   └── wtm-sweep          # `wtm clean -y` quand un worktree disparaît
 └── skills/
     ├── review-pr/
+    │   └── SKILL.md
+    ├── review-diff/
     │   └── SKILL.md
     ├── wtm/
     │   └── SKILL.md

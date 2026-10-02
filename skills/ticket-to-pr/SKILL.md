@@ -6,7 +6,7 @@ argument-hint: <TICKET-KEY>
 
 # Take a Jira ticket to a pull request
 
-Orchestrator: the ticket in, a pull request out. Most steps are delegated — to the `jira-read` and `wtm` skills of this plugin, and to whatever skills the project itself provides. The only new work is prior art, the business rules, the feasibility verdict and the worktree.
+Orchestrator: the ticket in, a pull request out. Most steps are delegated — to the `jira-read`, `wtm` and `review-diff` skills of this plugin, and to whatever skills the project itself provides. The only new work is prior art, the business rules, the feasibility verdict and the worktree.
 
 Chat with the user in their language; this skill file stays in English. Nothing is written to Jira, to git or to a PR outside the four gates below.
 
@@ -49,6 +49,7 @@ File present → use it and name it in the report (`acceptance: acceptance.md`),
 - [ ] 4. Worktree + stack, then Jira in progress + assign
 - [ ] 5. Plan in milestones            → GATE 2
 - [ ] 6. Implementation, one sonnet subagent per milestone
+- [ ] 6 bis. Self-review, fixes, one re-review
 - [ ] 7. Acceptance check
 - [ ] 8. CI gates                      → GATE 3 (commits) → GATE 4 (Studio write-back, then PR)
 ```
@@ -187,6 +188,25 @@ One subagent per milestone, `model: sonnet`, with a checkpoint between milestone
 
 Every agent works in the worktree, against its stack. Never `docker compose restart/stop/up/down` on a shared service, never mutate the main database.
 
+## 6 bis. Self-review
+
+Before the acceptance check, not after: a fix made after the captures invalidates them, while in this order step 7 proves the code that ships.
+
+One **fresh** subagent follows the `review-diff` skill of this plugin — not a milestone agent, which carries the writer's assumptions, and not sonnet: the reviewer is at least the writer's model. Its prompt gives what `review-diff` asks the caller for:
+
+- **The diff**: nothing is committed yet, so the working tree against the base, `git diff origin/<base>` plus the untracked files read whole — `origin/<base>...HEAD` would be empty.
+- **The checkout and the stack**: the worktree path, its branch and the ports `wtm adopt` printed.
+- **The expected behaviour**: the retained scope and the edge cases settled at GATE 1.
+- **The mergeability verdict**: none to read — step 8 runs the gates.
+
+Then the loop, bounded on purpose:
+
+1. Each blocker and major the review confirmed at runtime is fixed by a sonnet subagent, one per finding, as in step 6.
+2. **One** re-review by a fresh `review-diff` subagent, on the files the fixes touched (`git diff origin/<base> -- <those files>`), with the previous findings to account for: addressed, partly, not.
+3. Whatever is still open goes to the GATE 3 report. No third round: a review and a fix that keep answering each other spin, and the user arbitrates a disagreement better than another pass.
+
+Suggestions are listed at GATE 3, applied only if the user says so. Pre-existing defects are reported, never fixed here: they belong to their own ticket unless the user decides otherwise.
+
 ## 7. Acceptance check
 
 Follow the acceptance check settled at GATE 1 — the project skill, or the user's description — with the worktree's ports. Green tests are not proof: the expected behaviour has to be observed on the real surface.
@@ -266,6 +286,7 @@ Then name in the gate report which Studio files moved and which identifiers were
 - Merge, transition the ticket to a done status, or post an acceptance comment unasked
 - Run `wtm remove` or delete the worktree: the cleanup is the user's
 - Declare the ticket done because the tests or the CI gates are green
+- Reach GATE 3 with a blocker or a major of the self-review neither fixed nor named in the report
 - Present a stacked PR as green when no CI ran on it
 - Touch a shared stack, a shared database, or anything but local
 - Rename the branch after the stack exists
