@@ -159,6 +159,9 @@ running. What the sections below describe then arrived version by version:
   it yourself, suggest it. An adopted worktree on a detached HEAD, a rebase stopped
   on a conflict, keeps its branch: `exec`, `env` and `run` reach it, and the
   SessionEnd `clean -y` no longer takes its stack and database down.
+- **0.26.0** — `wtm switch <branch> [--from <ref>]` moves an adopted worktree to its
+  next branch on a fresh stack, same ports. It is the way out of a branch drift; see
+  *One worktree, one branch*.
 
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
 published, and an older binary is the user's to upgrade, not yours.
@@ -191,6 +194,7 @@ wtm project profiles                     # which profile, and what each one leav
 wtm adopt                                # this worktree, wherever another tool cut it
 wtm adopt --as feat/my-branch            # renaming the branch on the way in
 wtm adopt my-app worktree-curry -y       # named from anywhere, nothing asked
+wtm switch feat/next --from origin/main  # adopted worktree, next branch, fresh stack (0.26.0)
 
 wtm list                                 # INDEX / BRANCH / COMPOSE PROJECT / STATUS / PATH,
                                          # adoptable ones included
@@ -309,10 +313,24 @@ worktree for branch`. Since **0.15.0** the drift no longer costs the stack — t
 worktree's path is recorded next to its index, so `doctor` tells a switched branch
 from a worktree that really left, and the sweep a `create` runs refuses to take down
 a stack whose containers are still up. Before that, creating an unrelated worktree
-deleted such a database as a side effect. The pair stays broken, though: re-keying a
-drifted worktree to its new branch is not implemented, so the way out is to switch
-the branch back, or to address it by its recorded one. Reviewing several branches
-means one worktree each, `wtm create <branch>` per branch, never a switch inside one.
+deleted such a database as a side effect.
+
+Since **0.26.0**, an adopted worktree changes branch with `wtm switch <branch>`, typed
+from inside it, instead of `git switch`. It checks the branch out (an existing one
+as-is, one only a remote carries tracked, any other cut from `--from`, the project's
+base by default; it does not fetch the base, so `git fetch` first), drops the old
+branch's stack with its database, and starts a fresh one on the restored dump. The
+index moves with the worktree, so the ports you noted still hold. It never asks
+anything. Tracked files left modified refuse it before anything moves, so commit
+first. Never stash for the user. A branch already held by another worktree is refused
+by git, with the old stack left as it was. Anything using the stack (a test run, a dev
+server, a `wtm run`) loses it. A worktree that already drifted is repaired the same
+way: `wtm switch <the branch it is on now>` skips the checkout and moves the stack
+over. A switch that failed halfway is finished by rerunning the same command. Do not
+`wtm adopt` a drifted worktree: that allocates a second index while the old stack
+keeps the first. A worktree wtm created is refused, its directory being named after
+its branch. Reviewing several branches side by side still means one worktree each,
+`wtm create <branch>` per branch.
 
 ## The hooks this plugin installs
 

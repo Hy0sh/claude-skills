@@ -29,7 +29,7 @@ case "$common" in
   # path the listing does not carry at all belongs to an older binary that hid them.
   status=$(printf '%s\n' "$list" | awk -v p="$here" '$NF == p { print $(NF - 1) }')
   case "$status" in
-  adoptable | "") note="This worktree is not adopted by wtm: no recorded index, no isolated ports, no stack of its own. Adopt it where it stands rather than creating another one (\`git switch <branch>\` first if the work belongs to another branch, then \`wtm adopt -y\`), and tell the user." ;;
+  adoptable | "") note="This worktree is not adopted by wtm: no recorded index, no isolated ports, no stack of its own. Adopt it where it stands rather than creating another one (\`git switch <branch>\` first if the work belongs to another branch, then \`wtm adopt -y\`), and tell the user. If it was adopted before and its branch was switched since, \`wtm switch <the branch it is on now>\` (wtm 0.26.0) moves its stack over instead: adopting again would give it a second index." ;;
   esac
   ;;
 esac
