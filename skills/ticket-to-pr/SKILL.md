@@ -180,7 +180,9 @@ Transition refused, or the status absent from this workflow? Report it and ask. 
 
 Milestones, each one dispatchable and each one verifiable on its own. Write it to the session scratchpad, never into the repository: the diff of this branch carries the ticket's code and nothing else.
 
-**GATE 2.**
+Each milestone says what it delivers, the files it creates or modifies, how it is verified (the test, or what is observed on the running app), and which edge case settled at GATE 1 it implements. After the milestones, the risks: what the plan assumes without having checked it, a migration, a file another open branch also touches.
+
+**GATE 2.** Present the plan and stop: no code and no subagent before an explicit go. A change asked here goes into the plan, which is presented again. When the work is relayed (an orchestrator or a supervising agent stands between you and the user), the plan goes to whoever relays it, and the go comes back the same way: a plan nobody approved is not approved.
 
 ## 6. Implementation
 

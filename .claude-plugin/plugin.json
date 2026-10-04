@@ -1,7 +1,7 @@
 {
   "name": "hy0sh-skills",
   "description": "Skills personnels : review-pr (review structurée de PR GitHub), review-diff (méthode de review commune, utilisable sur la branche courante sans PR), wtm (worktree git avec stack Docker isolée, via worktree-manager), dailysum (portion personnelle du daily sum collaboratif), pr-watch (état de mes PR ouvertes), notify-pr-slack (annonce d'une PR sur Slack), jira-read (lecture de Jira), sprint-check (mes tickets Jira face à l'état du code), ticket-to-pr (un ticket Jira mené jusqu'à la PR), demo-pr (démonstration d'une PR validée étape par étape par un humain) et overlapping-prs (découpage, pile et ordre de merge de PR qui se recoupent)",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "author": {
     "name": "François Bouyer",
     "email": "francois.bouyer@thetribe.io"
