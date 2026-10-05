@@ -15,7 +15,8 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | `jira-read` | Lecture de Jira : clé du ticket depuis la branche, les commits ou la PR, ticket complet avec commentaires, recherche JQL. acli d'abord, MCP Atlassian en secours. Lecture seule |
 | `sprint-check` | Mes tickets Jira confrontés à l'état réel du code (PR mergées, ouvertes, en draft) : statuts faux, tickets libres dans mes épics, prochain ticket à prendre. Lecture seule |
 | `ticket-to-pr` | Un ticket Jira mené jusqu'à la PR : antériorité, faisabilité, worktree `wtm`, plan, implémentation par sous-agents, recette, gates, avec quatre portes de validation. S'appuie sur les skills du projet quand il en a, et demande sinon comment recetter et comment committer |
-| `demo-pr` | Démonstration d'une PR ou d'une branche dans un navigateur visible, validée étape par étape par un humain : niveau de démo selon le risque (asynchrone, direct, direct étendu), attendu annoncé avant chaque action, arrêt sur un ko. Ne modifie pas le code |
+| `demo-pr` | Démonstration d'une PR ou d'une branche en vidéo : préparation des données par le produit, une étape par critère d'acceptation, tournage headless avec `demo-film`, puis un seul retour humain (ok, ou ko avec l'étape). Tient une recette de démo par repo. Ne modifie pas le code |
+| `demo-film` | Usage de [demo-film](https://github.com/Hy0sh/demo-film) : filmer une web app en headless depuis un scénario YAML au vocabulaire fermé, avec les attendus vérifiés à l'écran, les sous-titres sous la page et le sommaire ; cycle `check`, `rehearse`, `film` et pièges des vraies applis |
 | `overlapping-prs` | Découpage de PR qui se recoupent (mêmes fichiers, même chaîne de migrations, même code partagé), quel que soit le sujet qui les regroupe, pour qu'elles cessent de se marcher dessus : PR socle d'abord, ordre de merge fixé et pile qui le suit, migration en dernier commit régénérée au merge plutôt que renumérotée. Planifie, ne rebase ni ne pousse |
 
 ## Configuration par repo
@@ -30,6 +31,7 @@ main :
 | `slack.json` | `notify-pr-slack` | le canal de review : `channel_id`, `name`, `connect` pour un canal Slack Connect |
 | `acceptance.md` | `ticket-to-pr` | `skill: <nom>`, ou le descriptif de la recette runtime |
 | `commits.md` | `ticket-to-pr` | `skill: <nom>`, ou la convention de commits et de PR |
+| `demo/recipe.md` | `demo-pr` | la recette de démo : comptes, réglages et workers à activer, libellés du menu, composants maison, pièges, remise à zéro |
 
 Le plugin installe aussi quatre hooks : un index des skills du plugin, une ligne par
 skill lue dans son `SKILL.md`, remis au modèle à chaque ouverture de session parce que
@@ -67,6 +69,7 @@ cp -R skills/jira-read ~/.claude/skills/
 cp -R skills/sprint-check ~/.claude/skills/
 cp -R skills/ticket-to-pr ~/.claude/skills/
 cp -R skills/demo-pr ~/.claude/skills/
+cp -R skills/demo-film ~/.claude/skills/
 ```
 
 ## Structure
@@ -100,6 +103,10 @@ claude-skills/
     │   └── SKILL.md
     ├── sprint-check/
     │   └── SKILL.md
-    └── ticket-to-pr/
+    ├── ticket-to-pr/
+    │   └── SKILL.md
+    ├── demo-pr/
+    │   └── SKILL.md
+    └── demo-film/
         └── SKILL.md
 ```

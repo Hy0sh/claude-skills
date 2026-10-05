@@ -8,7 +8,7 @@
     {
       "name": "hy0sh-skills",
       "source": "./",
-      "description": "Skills personnels François Bouyer : review-pr, review-diff, wtm, dailysum, pr-watch, notify-pr-slack, jira-read, sprint-check, ticket-to-pr et demo-pr"
+      "description": "Skills personnels François Bouyer : review-pr, review-diff, wtm, dailysum, pr-watch, notify-pr-slack, jira-read, sprint-check, ticket-to-pr, demo-pr et demo-film"
     }
   ]
 }
