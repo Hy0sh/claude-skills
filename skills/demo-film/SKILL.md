@@ -75,7 +75,13 @@ Rules `check` enforces, and why:
 
 ## 3. Finding the right names
 
-The time goes into naming elements the way the app exposes them. Look before guessing: the screenshot of a failed rehearsal, the component's source, or an accessibility snapshot.
+The time goes into naming elements the way the app exposes them. Find them in this order, and **never explore the app in a browser** to collect labels — clicking through the journey by hand costs more than the whole film:
+
+1. The repo's demo recipe, when there is one (the `demo-pr` skill says where).
+2. The source: the screen's components and the translation files hold the exact labels, in the viewer's language.
+3. `rehearse`: write the scenario with your best names and play it. A miss stops at the step, names what was looked for, lists the names visible on that screen, and leaves a screenshot: correct and play again, a few seconds per round.
+
+An accessibility snapshot is for one screen only, the one where a rehearsal just failed and its message and screenshot were not enough.
 
 - **Menus**: the visible label of the entry, which is often shorter than the page title ("Places", not "Place bookings"). Parents are often buttons, children links; `menu` handles both.
 - **Home-made widgets** (dropdowns, time pickers, comboboxes): not a native `<select>`. Open them with `click` on their trigger — a button inside a `<label>` takes the label's text as its accessible name, so `click: {role: button, name: "Start time"}` — then `click` the option's text.
@@ -95,6 +101,7 @@ The time goes into naming elements the way the app exposes them. Look before gue
 
 - Install the tool, the browser or ffmpeg yourself
 - Script Playwright by hand to make a demo video, or click by coordinates
+- Click through the app in a browser to discover labels: read the source, then let `rehearse` tell you
 - Film before `rehearse` is green, or without resetting what the rehearsal consumed
 - Use `open` to move inside the app after step 1
 - Write a `see` the screen does not really show at that moment
