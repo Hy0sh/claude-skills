@@ -1,6 +1,6 @@
 ---
 name: demo-pr
-description: Use when a pull request or a branch has to be shown working to a human before it is marked ready or merged — a reviewer, a PO or the author wants to see the change run rather than read screenshots, or an orchestrator collects one demo per worker. The agent prepares the data, writes a scenario with one step per acceptance criterion, films it headless with `demo-film`, and hands over a video and its chapters; the human answers once, ok or ko with the step. Does not change the code.
+description: Use when a pull request or a branch has to be shown working to a human before it is marked ready or merged — a reviewer, a PO or the author wants to see the change run rather than read screenshots, or an orchestrator collects one demo per worker. The agent prepares the data, writes a scenario with one step per acceptance criterion, films it headless with `demo-film`, and hands over the video alone; the human answers once, ok or ko with the step. Does not change the code.
 argument-hint: [branch|PR]
 ---
 
@@ -39,10 +39,10 @@ With the `demo-film` skill: write the scenario, `check`, `rehearse` until green,
 
 ## 4. Hand over
 
-- `~/Desktop/<branch without its prefix>/<KEY>-demo.mp4` and `<KEY>-demo-chapters.md`.
-- One message: the video, the chapter table, what the demo covers and what it does not (criteria not filmed, checks done outside the video), and the question: **ok, or ko with the step and what you see**.
+- `~/Desktop/<branch without its prefix>/<KEY>-demo.mp4`, and nothing else: no chapter file, no summary. The captions in the video already name each step.
+- One message: the video's path, what the demo covers and what it does not (criteria not filmed, checks done outside the video), and the question: **ok, or ko with the step and what you see**.
 - Under an orchestrator, the same message goes to the orchestrator, which relays it.
-- After an ok, and once the human agrees to post it: attach the video to the PR with `gh pr comment <PR> --attach <video> --body-file <file>` (or `gh pr edit --attach` when the repo's PR convention puts screenshots in the body). The body holds one line — the criteria demonstrated and the date — then the chapter table, and references the video as `![](./<file>.mp4)` **alone in its paragraph**, which `gh` rewrites to the uploaded URL and GitHub renders as a player; anywhere else it is only a link.
+- After an ok, and once the human agrees to post it: put **the video alone** in the PR body, where the repo's PR convention puts screenshots (read it first: its commit/PR skill or notes); no summary line, no chapter table. Fetch the body, insert `![](./<file>.mp4)` **alone in its paragraph** at that place, keep everything else as it is, then `gh pr edit <PR> --body-file <file> --attach <video>`: `gh` rewrites the path to the uploaded URL and GitHub renders a player (anywhere else it is only a link). A PR comment only when the repo has no place for screenshots.
 - Size: GitHub takes videos up to 10 MB on a free plan, 100 MB on a paid one (H.264 `.mp4`, which `demo-film` writes). Over the limit, say so and offer a shorter cut (the steps that matter) rather than a blurrier one.
 
 ## 5. A ko

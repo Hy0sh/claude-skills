@@ -94,8 +94,8 @@ An accessibility snapshot is for one screen only, the one where a rehearsal just
 ## 4. Output
 
 - `demo.mp4`: the page untouched (only a visible cursor and click halo), captions in a band under it, starting once the app shows.
-- `chapters.md`: step, acceptance point, minute, caption, expectation. Give it with the video: it lets the viewer answer "step 6 at 1:42".
-- Check one or two frames of key steps before handing the video over (`ffmpeg -ss <t> -i demo.mp4 -frames:v 1 f.png`, then read the image).
+- `chapters.md`: step, acceptance point, minute, caption, expectation. It is for you, not for the viewer: the captions already name each step, so hand over the video alone.
+- Check one or two frames of key steps before handing the video over, at the minutes `chapters.md` gives (`ffmpeg -ss <t> -i demo.mp4 -frames:v 1 f.png`, then read the image).
 
 ## Never
 
