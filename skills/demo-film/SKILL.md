@@ -1,6 +1,6 @@
 ---
 name: demo-film
-description: Use when a web app has to be filmed doing something — a demo video of a feature, a pull request, a bug reproduction — with `demo-film`, a Go CLI that plays a declarative YAML scenario headless, checks that each expected text is on screen, and writes an mp4 with captions under the page plus a chapter list. Covers installing it, writing a scenario in its closed vocabulary, the check / rehearse / film cycle, reading its errors, and the traps of real apps (menus, home-made widgets, iframes, new tabs).
+description: Use when a web app, or a command line tool through a terminal, has to be filmed doing something — a demo video of a feature, a pull request, a bug reproduction — with `demo-film`, a Go CLI that plays a declarative YAML scenario headless, checks that each expected text is on screen, and writes an mp4 with captions under the page plus a chapter list. Covers installing it, writing a scenario in its closed vocabulary, the check / rehearse / film cycle, reading its errors, cutting long waits, filming a long demo in parts joined at the end, and the traps of real apps (menus, home-made widgets, native date inputs, iframes, new tabs).
 ---
 
 # Filming a web app with demo-film
@@ -20,6 +20,9 @@ The tool's README (https://github.com/Hy0sh/demo-film) is the reference for the 
 | `demo-film` | `go install github.com/Hy0sh/demo-film/cmd/demo-film@latest` (or a release binary) |
 | the browser | `demo-film install` |
 | `ffmpeg` | the system package manager, e.g. `brew install ffmpeg` |
+| `ttyd` (terminal demos only) | `brew install ttyd`, `apt install ttyd` |
+
+`terminal`, `cut`, `join`, `watermark` and `nth` on `click` need demo-film 0.4.0 or later: on an older version, `check` rejects them as unknown keys.
 
 ## 1. The cycle
 
@@ -39,10 +42,11 @@ demo-film film scenario.yaml -o dir      # the take: demo.mp4 + chapters.md
 ```yaml
 title: "Short title of the demo"
 base_url: http://app.localhost:3000
-locale: fr                 # optional: i18next language, set before the app loads
+locale: fr                 # optional: i18next and the browser's language (native date inputs, Intl)
 hide: [".dev-toolbar"]     # optional: dev overlays hidden while filming
-speed: 1                   # optional: 0.25-4, gestures only (0.5 = twice as slow)
-labels: {step: "Étape", check: "vérifie", see: "Tu dois voir :"}   # caption words in the viewer's language
+speed: 1                   # optional: 0.25-4, the whole video, gestures and captions (2 = twice as fast)
+labels: {step: "Étape", check: "vérifie", see: "Tu dois voir :", later: "plus tard"}   # caption words in the viewer's language
+watermark: {text: "© Some Co", position: bottom-right}   # optional: or image: logo.png; a corner of the page, never the band
 steps:
   - caption: what I do, in one sentence     # shown before the actions
     check: AC1                              # optional: the acceptance point this step proves
@@ -60,18 +64,71 @@ steps:
 | `open: path-or-url` | step 1, or another origin (a mail catcher); never to move inside the app afterwards |
 | `menu: [Parent, Child]` | sidebar or nav, exact names; the parent is opened if the child is hidden |
 | `click: "Text"` · `{role, name}` · `{row, button}` · `{row, button: {nth: -2}}` | by visible text, by role and accessible name, or a button in a table row (by name, or by index for icon-only buttons) |
-| `fill: {field, value}` | field by label, placeholder, rank (`1`) or `password`; typed visibly |
+| `click: {text, nth}` · `{role, name, nth}` | when several visible elements share the text or the name (a slot per day, an "Actions" button per card): the nth one, from 0, negative from the end; out of range, the error says how many match |
+| `fill: {field, value}` | field by label, placeholder, rank (`1`) or `password`; typed visibly. A native date, month, time or datetime-local input takes its ISO value (`2026-10-06`, `2026-10-06T08:00`) at once, and the step fails if the field does not keep it |
+| `type: "text"` | keystrokes to whatever has the focus: a terminal |
 | `select: {field, option}` | native `<select>` only |
 | `press`, `hover`, `wait` | a key, the cursor onto an element, a text to wait for |
 | `popup: {click, url_contains}` | a link opening a new tab: the URL is checked, the tab is not filmed |
 | `confirm: "Button"` | a button of the last opened dialog (an "abandon changes?" prompt) |
 | `within: dialog` | modifier on click, fill, select, hover, wait: look only in the last open dialog |
+| `cut: true`, `timeout: N` | modifiers on `wait`: see "Long waits" below |
 
 Rules `check` enforces, and why:
 
 - **No `open` inside the app after step 1**: it reloads the app, and the video shows a blank page. Navigate through menus and links like a user.
 - **A step never ends on a forward button** (Next, Suivant, Continue): its "you should see" would be shown on the next screen. Put that click first in the next step.
 - **A `check` step has a `see`**: an acceptance point is proven on screen, not asserted in a caption.
+
+### Long waits
+
+A task that takes a while (an export, a generation, a stack starting) is not filmed in real time: wait for its result with `cut: true`, and give it the time it needs with `timeout` (seconds, the default is 15).
+
+```yaml
+- click: Generate the invoices
+- wait: Invoices generated
+  cut: true
+  timeout: 600
+```
+
+A transition card with a spinner covers the page, the wait is cut out under it, then the card reads "⏩ 2:14 later" and fades onto the result: the viewer sees that time passed. Wait for a text only the result shows; one already on screen ends the wait at once, and nothing is cut.
+
+Repeated operations (the same object created for five entities) are not filmed at all: seed them off camera, film one.
+
+### A terminal
+
+`terminal` replaces `base_url` to film a shell (served in the browser by ttyd, behind a password made for the run, opened off camera once the prompt shows; no `open` in such a scenario, it would restart the shell):
+
+```yaml
+terminal: {cwd: ../shop}           # relative to the scenario file, ~ expanded; shell: a command line, defaults to $SHELL
+steps:
+  - caption: I create a worktree with its own stack
+    do:
+      - type: wtm create feat/login
+      - press: Enter
+      - wait: stack started
+        cut: true
+        timeout: 900
+    see: [stack started]
+    expect: the worktree is ready on its own ports
+```
+
+The typed command stays on screen: a `wait` or `see` on a word it contains matches at once. Aim at a line only the output prints, read from the tool's source rather than guessed — a message printed on one path only (after an optional hook, say) never comes on another. A rehearsal really runs the commands: undo what it created before the take, or film directly, since a failed take writes nothing.
+
+### A long film, in parts
+
+Past a few minutes, or when the demo changes accounts, film **one scenario per part** and join them:
+
+```
+demo-film film agent.yaml -o parts/1
+demo-film film citizen.yaml -o parts/2
+demo-film join parts/1 parts/2 -o final      # --no-cards: no title cards
+```
+
+- A failing rehearsal replays only its part; a failing take loses only its part.
+- Each part starts in a fresh browser: cut where the account changes, and log in at the start of the next part.
+- Every part has the same `viewport` and `speed`, or `join` refuses it by name; parts filmed with demo-film older than 0.4.0 cannot be joined.
+- `join` puts a title card with each part's `title` before it (quote a title containing `:` in YAML) and merges the chapters, one section per part, times shifted (to the second: a joined time may be a second early). Steps keep their per-part numbering.
 
 ## 3. Finding the right names
 
@@ -86,15 +143,16 @@ An accessibility snapshot is for one screen only, the one where a rehearsal just
 - **Menus**: the visible label of the entry, which is often shorter than the page title ("Places", not "Place bookings"). Parents are often buttons, children links; `menu` handles both.
 - **Home-made widgets** (dropdowns, time pickers, comboboxes): not a native `<select>`. Open them with `click` on their trigger — a button inside a `<label>` takes the label's text as its accessible name, so `click: {role: button, name: "Start time"}` — then `click` the option's text.
 - **Text that appears later**: a badge or a summary may only render on the next screen; `see` what the current screen really shows.
-- **Duplicated labels**: `click: "Save"` takes the first visible one; scope with `within: dialog`, `{role, name}` or a table `row`.
+- **Duplicated labels**: `click: "Save"` takes the first visible one; scope with `within: dialog`, `{role, name}` or a table `row`, and when the twins are genuine (one per day, one per card), pick one with `nth` — the order is the page's, so seed the data in a known order.
 - **Iframes** (a mail catcher's message body): `see` looks into frames; actions do not.
 - **New tabs**: assert them with `popup`; show the target afterwards by navigating to it in the app.
 - **Absence** ("no mail to the author") cannot be checked yet: say it in `expect`, and check it yourself outside the video.
+- **Out of the vocabulary**: file uploads, drag and drop, downloads, map markers with no text or accessible name, and the browser's own `confirm()`/`alert()` (dismissed automatically, which cancels the action). Prepare such states off camera with data, or film around them; never script around the tool.
 
 ## 4. Output
 
 - `demo.mp4`: the page untouched (only a visible cursor and click halo), captions in a band under it, starting once the app shows.
-- `chapters.md`: step, acceptance point, minute, caption, expectation. It is for you, not for the viewer: the captions already name each step, so hand over the video alone.
+- `chapters.md`: step, acceptance point, minute, caption, expectation. It is for you, not for the viewer: the captions already name each step, so hand over the video alone. After `join`, one section per part, on the joined video's minutes.
 - Check one or two frames of key steps before handing the video over, at the minutes `chapters.md` gives (`ffmpeg -ss <t> -i demo.mp4 -frames:v 1 f.png`, then read the image).
 
 ## Never
@@ -105,3 +163,4 @@ An accessibility snapshot is for one screen only, the one where a rehearsal just
 - Film before `rehearse` is green, or without resetting what the rehearsal consumed
 - Use `open` to move inside the app after step 1
 - Write a `see` the screen does not really show at that moment
+- Film a long wait in real time instead of cutting it, or a long demo as one scenario instead of parts
