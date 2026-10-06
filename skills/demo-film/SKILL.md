@@ -38,7 +38,7 @@ demo-film film scenario.yaml -o dir      # the take: demo.mp4 + chapters.md
 - A failure names the step, the action and what was looked for, and leaves `rehearse-fail-step<N>.png`: **read the screenshot** before changing anything. It answers most questions (wrong label, element not shown yet, a dialog in the way).
 - Before the take, reset the data the rehearsal consumed (the record it created, the mails it sent), so the take starts from the state step 1 expects. A rehearsal that creates something is not idempotent.
 - Keep the scenario out of any public repo when it names a client's app, accounts or URLs.
-- Keep scenarios and the output of `film` and `join` out of any configuration or recipe folder: they go in a working folder (the session's scratchpad, or one the user chooses).
+- Keep scenarios and the output of `film` and `join` out of any configuration or recipe folder: they go in the repo's working folder, named by the `Working folder:` line of its demo recipe (see the `demo-pr` skill), or in the session's scratchpad for a one-off.
 
 ## 2. Writing the scenario
 
