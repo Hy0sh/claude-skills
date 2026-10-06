@@ -22,7 +22,7 @@ The tool's README (https://github.com/Hy0sh/demo-film) is the reference for the 
 | `ffmpeg` | the system package manager, e.g. `brew install ffmpeg` |
 | `ttyd` (terminal demos only) | `brew install ttyd`, `apt install ttyd` |
 
-`terminal`, `cut`, `join` and `watermark` need demo-film 0.4.0 or later: on an older version, `check` rejects them as unknown keys.
+`terminal`, `cut`, `join`, `watermark` and `nth` on `click` need demo-film 0.4.0 or later: on an older version, `check` rejects them as unknown keys.
 
 ## 1. The cycle
 
@@ -64,6 +64,7 @@ steps:
 | `open: path-or-url` | step 1, or another origin (a mail catcher); never to move inside the app afterwards |
 | `menu: [Parent, Child]` | sidebar or nav, exact names; the parent is opened if the child is hidden |
 | `click: "Text"` · `{role, name}` · `{row, button}` · `{row, button: {nth: -2}}` | by visible text, by role and accessible name, or a button in a table row (by name, or by index for icon-only buttons) |
+| `click: {text, nth}` · `{role, name, nth}` | when several visible elements share the text or the name (a slot per day, an "Actions" button per card): the nth one, from 0, negative from the end; out of range, the error says how many match |
 | `fill: {field, value}` | field by label, placeholder, rank (`1`) or `password`; typed visibly. A native date, month, time or datetime-local input takes its ISO value (`2026-10-06`, `2026-10-06T08:00`) at once, and the step fails if the field does not keep it |
 | `type: "text"` | keystrokes to whatever has the focus: a terminal |
 | `select: {field, option}` | native `<select>` only |
@@ -96,10 +97,10 @@ Repeated operations (the same object created for five entities) are not filmed a
 
 ### A terminal
 
-`terminal` replaces `base_url` to film a shell (served in the browser by ttyd, opened off camera once the prompt shows):
+`terminal` replaces `base_url` to film a shell (served in the browser by ttyd, behind a password made for the run, opened off camera once the prompt shows; no `open` in such a scenario, it would restart the shell):
 
 ```yaml
-terminal: {cwd: ~/code/shop}       # shell: defaults to $SHELL
+terminal: {cwd: ../shop}           # relative to the scenario file, ~ expanded; shell: a command line, defaults to $SHELL
 steps:
   - caption: I create a worktree with its own stack
     do:
@@ -127,7 +128,7 @@ demo-film join parts/1 parts/2 -o final      # --no-cards: no title cards
 - A failing rehearsal replays only its part; a failing take loses only its part.
 - Each part starts in a fresh browser: cut where the account changes, and log in at the start of the next part.
 - Every part has the same `viewport` and `speed`, or `join` refuses it by name; parts filmed with demo-film older than 0.4.0 cannot be joined.
-- `join` puts a title card with each part's `title` before it (quote a title containing `:` in YAML) and merges the chapters, one section per part, times shifted. Steps keep their per-part numbering.
+- `join` puts a title card with each part's `title` before it (quote a title containing `:` in YAML) and merges the chapters, one section per part, times shifted (to the second: a joined time may be a second early). Steps keep their per-part numbering.
 
 ## 3. Finding the right names
 
@@ -142,7 +143,7 @@ An accessibility snapshot is for one screen only, the one where a rehearsal just
 - **Menus**: the visible label of the entry, which is often shorter than the page title ("Places", not "Place bookings"). Parents are often buttons, children links; `menu` handles both.
 - **Home-made widgets** (dropdowns, time pickers, comboboxes): not a native `<select>`. Open them with `click` on their trigger — a button inside a `<label>` takes the label's text as its accessible name, so `click: {role: button, name: "Start time"}` — then `click` the option's text.
 - **Text that appears later**: a badge or a summary may only render on the next screen; `see` what the current screen really shows.
-- **Duplicated labels**: `click: "Save"` takes the first visible one; scope with `within: dialog`, `{role, name}` or a table `row`.
+- **Duplicated labels**: `click: "Save"` takes the first visible one; scope with `within: dialog`, `{role, name}` or a table `row`, and when the twins are genuine (one per day, one per card), pick one with `nth` — the order is the page's, so seed the data in a known order.
 - **Iframes** (a mail catcher's message body): `see` looks into frames; actions do not.
 - **New tabs**: assert them with `popup`; show the target afterwards by navigating to it in the app.
 - **Absence** ("no mail to the author") cannot be checked yet: say it in `expect`, and check it yourself outside the video.
