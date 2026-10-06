@@ -22,17 +22,19 @@ The tool's README (https://github.com/Hy0sh/demo-film) is the reference for the 
 | `ffmpeg` | the system package manager, e.g. `brew install ffmpeg` |
 | `ttyd` (terminal demos only) | `brew install ttyd`, `apt install ttyd` |
 
-`terminal`, `cut`, `join`, `watermark` and `nth` on `click` need demo-film 0.4.0 or later: on an older version, `check` rejects them as unknown keys.
+`terminal`, `cut`, `join`, `watermark` and `nth` on `click` need demo-film 0.4.0 or later, `wait: {gone}`, `wait: {enabled}` and `rehearse --paced` 0.5.0 or later: on an older version, `check` rejects them as unknown keys.
 
 ## 1. The cycle
 
 ```
 demo-film check scenario.yaml            # no browser: schema and rules
 demo-film rehearse scenario.yaml -o dir  # plays everything, no pause, no video (seconds)
+demo-film rehearse --paced scenario.yaml # at the take's pace, still no video: the last check before the take
 demo-film film scenario.yaml -o dir      # the take: demo.mp4 + chapters.md
 ```
 
 - Iterate with `rehearse` only; film once it is green. A take lasts the length of the video.
+- **A step that passes in one and fails in the other depends on time**: a plain rehearsal has no pause, the take has captions to read and a cursor that travels. Find what the step waits for and say it — `wait: {gone: "Group created."}` for a toast or a spinner, `wait: {enabled: "Next"}` for a control greyed until data loads — then confirm with `rehearse --paced`. A toast pauses while the mouse is over it, and a rehearsal's cursor lands at once on the button under it: wait for the toast to go before clicking there. Never buy time with `hover` or extra gestures: each one is a stray cursor move in the video.
 - A failure names the step, the action and what was looked for, and leaves `rehearse-fail-step<N>.png`: **read the screenshot** before changing anything. It answers most questions (wrong label, element not shown yet, a dialog in the way).
 - Before the take, reset the data the rehearsal consumed (the record it created, the mails it sent), so the take starts from the state step 1 expects. A rehearsal that creates something is not idempotent.
 - Keep the scenario out of any public repo when it names a client's app, accounts or URLs.
@@ -67,11 +69,12 @@ steps:
 | `click: {text, nth}` · `{role, name, nth}` | when several visible elements share the text or the name (a slot per day, an "Actions" button per card): the nth one, from 0, negative from the end; out of range, the error says how many match |
 | `fill: {field, value}` | field by label, placeholder, rank (`1`) or `password`; typed visibly. A native date, month, time or datetime-local input takes its ISO value (`2026-10-06`, `2026-10-06T08:00`) at once, and the step fails if the field does not keep it |
 | `type: "text"` | keystrokes to whatever has the focus: a terminal |
-| `select: {field, option}` | native `<select>` only |
+| `select: {field, option}` | native `<select>` only; options that load late are waited for |
 | `press`, `hover`, `wait` | a key, the cursor onto an element, a text to wait for |
+| `wait: {gone: "text"}` · `wait: {enabled: "text"}` | wait, with no gesture, until nothing visible shows the text (a toast, a spinner; also proves an absence), or until a control is no longer disabled |
 | `popup: {click, url_contains}` | a link opening a new tab: the URL is checked, the tab is not filmed |
 | `confirm: "Button"` | a button of the last opened dialog (an "abandon changes?" prompt) |
-| `within: dialog` | modifier on click, fill, select, hover, wait: look only in the last open dialog |
+| `within: dialog` | modifier on click, fill, select, hover, wait: look only in the last open dialog. Put it on **every** action aimed inside a modal: without it the page behind answers too (a `fill` by rank picks a field under the modal) |
 | `cut: true`, `timeout: N` | modifiers on `wait`: see "Long waits" below |
 
 Rules `check` enforces, and why:
@@ -93,7 +96,7 @@ A task that takes a while (an export, a generation, a stack starting) is not fil
 
 A transition card with a spinner covers the page, the wait is cut out under it, then the card reads "⏩ 2:14 later" and fades onto the result: the viewer sees that time passed. Wait for a text only the result shows; one already on screen ends the wait at once, and nothing is cut.
 
-Repeated operations (the same object created for five entities) are not filmed at all: seed them off camera, film one.
+**One example of each operation on screen.** Repetitions and volume (the same object created for five entities, a hundred rows) are created off camera, and one is filmed. When the repetition falls in the middle of a filmed wizard, start a watcher before the take that creates the rest as soon as the filmed object exists, and let the step wait for the result with `cut`.
 
 ### A terminal
 
@@ -128,7 +131,14 @@ demo-film join parts/1 parts/2 -o final      # --no-cards: no title cards
 - A failing rehearsal replays only its part; a failing take loses only its part.
 - Each part starts in a fresh browser: cut where the account changes, and log in at the start of the next part.
 - Every part has the same `viewport` and `speed`, or `join` refuses it by name; parts filmed with demo-film older than 0.4.0 cannot be joined.
-- `join` puts a title card with each part's `title` before it (quote a title containing `:` in YAML) and merges the chapters, one section per part, times shifted (to the second: a joined time may be a second early). Steps keep their per-part numbering.
+- `join` puts a title card with each part's `title` before it (quote a title containing `:` in YAML) and merges the chapters, one section per part, times shifted (to the second: a joined time may be a second early). Steps keep their per-part numbering. The card shows the `# Title` line of each part's `chapters.md`: to renumber the parts ("1. Agent", "2. Citizen"), edit that line and join again, without filming again.
+
+How a long film holds together:
+
+- **A preparation per part**: a script that restores a database snapshot, then creates exactly the state the part's step 1 expects. Rehearsals and failed takes are undone by running it again. When the next part depends on what this one creates, save a snapshot right after its good take, and start the next part's preparation from it.
+- **A snapshot is a database, not the files**: what lives in object storage (S3-like uploads) is not in an SQL dump; the preparation recreates it.
+- **Several agents in parallel**: one isolated environment each (stack, database, ports). When one agent films what another must recreate by script, write the shared values down first (names, dates, amounts) and check at the end that the parts agree.
+- **Deliver outside the recipe**: the joined film goes to a folder of the user's (their desktop, a shared drive), never into a skills or configuration directory; only scenarios and preparation scripts stay in the recipe.
 
 ## 3. Finding the right names
 
@@ -146,7 +156,9 @@ An accessibility snapshot is for one screen only, the one where a rehearsal just
 - **Duplicated labels**: `click: "Save"` takes the first visible one; scope with `within: dialog`, `{role, name}` or a table `row`, and when the twins are genuine (one per day, one per card), pick one with `nth` — the order is the page's, so seed the data in a known order.
 - **Iframes** (a mail catcher's message body): `see` looks into frames; actions do not.
 - **New tabs**: assert them with `popup`; show the target afterwards by navigating to it in the app.
-- **Absence** ("no mail to the author") cannot be checked yet: say it in `expect`, and check it yourself outside the video.
+- **Absence** ("the error is gone", "no warning left"): `wait: {gone: "text"}` proves it on screen. An absence elsewhere ("no mail to the author") is said in `expect` and checked outside the video.
+- **No-break spaces**: French labels put U+202F or U+00A0 before a colon or inside a time ("ex : Natation", "11 h 30"). Type a plain space in the scenario: any white space on the page matches it.
+- **A control with no accessible name** (a `role=switch` or a checkbox with no label of its own): as a last resort, `click` the visible label next to it, then `press: Tab` and `press: Space`. Say in the hand-over that the control lacks an accessible name: the fix belongs in the app.
 - **Out of the vocabulary**: file uploads, drag and drop, downloads, map markers with no text or accessible name, and the browser's own `confirm()`/`alert()` (dismissed automatically, which cancels the action). Prepare such states off camera with data, or film around them; never script around the tool.
 
 ## 4. Output
@@ -154,6 +166,7 @@ An accessibility snapshot is for one screen only, the one where a rehearsal just
 - `demo.mp4`: the page untouched (only a visible cursor and click halo), captions in a band under it, starting once the app shows.
 - `chapters.md`: step, acceptance point, minute, caption, expectation. It is for you, not for the viewer: the captions already name each step, so hand over the video alone. After `join`, one section per part, on the joined video's minutes.
 - Check one or two frames of key steps before handing the video over, at the minutes `chapters.md` gives (`ffmpeg -ss <t> -i demo.mp4 -frames:v 1 f.png`, then read the image).
+- Still frames hide motion: stray cursor moves only show in a moving excerpt. For the parts rich in gestures, watch a short excerpt, or at least count the `hover` of their scenario — more than a handful usually means time was bought with gestures instead of `wait`.
 
 ## Never
 
@@ -164,3 +177,4 @@ An accessibility snapshot is for one screen only, the one where a rehearsal just
 - Use `open` to move inside the app after step 1
 - Write a `see` the screen does not really show at that moment
 - Film a long wait in real time instead of cutting it, or a long demo as one scenario instead of parts
+- Buy time with `hover` or extra gestures: wait for the condition itself (`wait: {gone}`, `wait: {enabled}`)
