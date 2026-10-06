@@ -45,10 +45,10 @@ demo-film film scenario.yaml -o dir      # the take: demo.mp4 + chapters.md
 ```yaml
 title: "Short title of the demo"
 base_url: http://app.localhost:3000
-locale: fr                 # optional: i18next and the browser's language (native date inputs, Intl)
+locale: fr                 # optional: i18next, the browser's language (native date inputs, Intl) and, from 0.6.0, the band's and cards' words
 hide: [".dev-toolbar"]     # optional: dev overlays hidden while filming
 speed: 1                   # optional: 0.25-4, the whole video, gestures and captions (2 = twice as fast)
-labels: {step: "Étape", check: "vérifie", see: "Tu dois voir :", later: "plus tard"}   # caption words in the viewer's language
+labels: {see: "Tu dois voir :"}   # optional: overrides one of the locale's words; on demo-film before 0.6.0, give all four (step, check, see, later) or the missing ones stay English
 watermark: {text: "© Some Co", position: bottom-right}   # optional: or image: logo.png; a corner of the page, never the band
 steps:
   - caption: what I do, in one sentence     # shown before the actions
