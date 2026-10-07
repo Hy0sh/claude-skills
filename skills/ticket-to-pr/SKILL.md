@@ -8,7 +8,7 @@ argument-hint: <TICKET-KEY>
 
 Orchestrator: the ticket in, a pull request out. Most steps are delegated — to the `jira-read`, `wtm` and `review-diff` skills of this plugin, and to whatever skills the project itself provides. The only new work is prior art, the business rules, the feasibility verdict and the worktree.
 
-Chat with the user in their language; this skill file stays in English. Nothing is written to Jira, to git or to a PR outside the four gates below.
+Chat with the user in their language; this skill file stays in English. Nothing is written to Jira, to git or to a PR before the go of one of the four gates below: the go of GATE 1 covers the worktree, the in-progress transition and the assignment of step 4.
 
 ## What the project provides
 
