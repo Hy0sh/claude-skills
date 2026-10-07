@@ -52,9 +52,8 @@ Read-only commands (`wtm --version`, `wtm doctor`, `wtm list`, `wtm backup list`
 
 Being in *a* worktree is not the same as being in one wtm knows. Until it is adopted,
 a worktree another tool cut has no index, no provisioned `.env`, no stack, and `wtm
-list` does not show it. Since **0.10.0** that is a state to leave rather than a dead
-end: `wtm adopt` from inside it, and every command below works on it afterwards. On an
-older binary it really is a dead end, and the upgrade is the user's to run.
+list` does not show it. That is a state to leave rather than a dead end: `wtm adopt`
+from inside it, and every command below works on it afterwards.
 
 ## Before anything
 
@@ -75,96 +74,18 @@ Without Go, the [latest release](https://github.com/Hy0sh/worktree-manager/relea
 carries a binary per platform (darwin and linux, arm64 and amd64) plus a `SHA256SUMS`;
 that download and its move onto the PATH are the user's to run too.
 
-`wtm project edit` and the step-by-step registration below need **wtm >= 0.3.0**, and
-the guardrails this skill relies on land in **0.4.3**: a refresh refuses to publish a
-dump of a database the migrations never reached, `doctor` reports port clashes between
-projects and the volumes of removed worktrees, and a refused `remove` leaves the stack
-running. What the sections below describe then arrived version by version:
-
-- **0.5.0** — `post_create`, the compose environment `wtm run` sets, and a `remove`
-  that also drops the images its stack built.
-- **0.6.0** — `--migrations-path`, without which a project whose migrations live
-  outside the default pathspec has its dump called up to date forever.
-- **0.7.0** — the wait on the application service before `post_create`, bounded by
-  `--ready-timeout` and `--ready-interval`.
-- **0.8.0** — `--no-post-create`, `stop --all`, `remove --all`.
-- **0.9.0** — `create --run` and `--exec`, and the memory question a create asks when
-  it runs on a terminal, with `--ignore-memory` to answer it in advance.
-- **0.10.0** — `wtm adopt`, `create --from-here`, and the three `doctor` reports this
-  skill leans on for a machine that has drifted: two worktrees of one project fighting
-  over a port, recorded indices no worktree stands behind, anonymous volumes nothing
-  mounts. A refresh now also stops the database it started for itself, an index whose
-  ports clash with a recorded worktree is skipped instead of failing at `docker
-  compose up`, and on a native docker the dump is at last readable by the container
-  that restores it: before, every worktree on Linux came up on an empty database
-  without a word.
-- **0.11.0** — `wtm clean`, which drops in one go what `doctor` reports as left
-  behind: the recorded indices, and the volumes and images of worktrees that no
-  longer exist. The hooks below lean on it.
-- **0.12.0** — a `create` that releases those indices itself before allocating its
-  own, so a worktree gone outside wtm stops pushing the next one onto ports its
-  neighbours never used.
-- **0.13.0** — the rest of what `doctor` can now see: the stacks of worktrees that
-  no longer exist, the worktrees the registry holds no index for, and the directories
-  git no longer lists. One worktree of the second kind switches the stack, volume and
-  image reports off for its whole project, a stack of theirs being indistinguishable
-  from one a removed worktree left; before, doctor answered "nothing left behind"
-  where it meant "cannot tell". `remove --force` deletes a directory git no longer
-  lists, which until then could only be cleared by hand.
-- **0.13.1** — `clean` names the two findings it declines, those same directories and
-  the anonymous volumes, each with the command that settles it. It still leaves them
-  alone, nothing being able to read whether such a directory holds uncommitted work.
-- **0.14.0** — `wtm list` marks the worktrees left to adopt `adoptable`, instead of
-  answering `no worktree for <project>` with a dozen of them sitting there. That is
-  how you name one for `wtm adopt` without knowing its branch by heart.
-- **0.14.1** — `wtm exec` names its own compose files. Before, an exec typed inside a
-  session opened by `wtm run` or `create --run` followed that session's `COMPOSE_FILE`
-  and addressed the worktree the session had been opened on, failing on a `stat` of a
-  path removed since. `start` was never affected, which made the two read as a stale
-  path held somewhere in wtm.
-- **0.15.0** — `--profile` starts a named subset of the stack, `start_dependencies`
-  lets a `migrate_command` that also seeds reach the services it needs while the
-  backup refreshes, and that refresh builds its throwaway image instead of taking
-  whatever the cache held. The note a fresh stack printed about its missing seed is
-  gone: a project whose `migrate_command` seeds the dump looks exactly like one that
-  never seeded, and following the note replayed a seeder over rows already there. A
-  branch switched inside a worktree no longer costs that worktree its stack.
-- **0.16.0** — `--profile-set` on `project create` and `project edit` writes the
-  profiles, until then only read from a hand-edited `config.json`.
-- **0.17.0** — `wtm project profiles` says what each profile starts and leaves out,
-  `depends_on` included, and `--profile-description` says when to pick it.
-- **0.18.0** — the `project create` / `project edit` walk offers what the project
-  already says as defaults, flags a migrations pathspec matching no tracked file, and
-  saves nothing until the user confirms a closing summary.
-- **0.19.0** — `wtm ports <branch>` prints the addresses `start` printed, one service
-  per line, for a stack you were handed rather than started.
-- **0.20.0** — a service reached through a reverse proxy states its address in a
-  `wtm.url` compose label, printed as `<service>/url`. A versioned `.env` no longer
-  leaves the port variables at the main stack's values outside `ports:`: wtm passes
-  them in compose's environment, and `wtm run` commands see them too.
-- **0.21.0** — a bare `docker compose` typed in a worktree reaches its stack: wtm
-  writes a `compose.override.yaml` there with the worktree's project name and ports,
-  unless the project has one of its own. `wtm env` prints what `wtm run` sets as
-  `export` lines, `wtm list` names each compose project, and `ports`, `path`, `env`,
-  `exec` and `run` take the current worktree's branch when none is given. `create
-  --no-start` allocates the index and writes the compose files. A project lists the
-  git-ignored files each worktree gets a copy of with `--copy`.
-- **0.22.0** — `start` and `wtm ports` read the addresses a reverse proxy routes to
-  each service (Traefik, nginx-proxy, caddy-docker-proxy, told by their image) and
-  print them in a `urls` block ahead of the ports. The `wtm.url` label is gone: do
-  not add one to a project. A new worktree no longer takes an index whose ports
-  another project's worktree already publishes.
-- **0.23.0** — `wtm logs <branch>` follows the stack's logs from the last 200 lines.
-  `wtm tui` is a live dashboard for the user's terminal: it is interactive, never run
-  it yourself, suggest it. An adopted worktree on a detached HEAD, a rebase stopped
-  on a conflict, keeps its branch: `exec`, `env` and `run` reach it, and the
-  SessionEnd `clean -y` no longer takes its stack and database down.
-- **0.26.0** — `wtm switch <branch> [--from <ref>]` moves an adopted worktree to its
-  next branch on a fresh stack, same ports. It is the way out of a branch drift; see
-  *One worktree, one branch*.
-
+This skill describes **wtm >= 0.26.0**. On an older binary some commands below do not
+exist (`adopt`, `clean`, `ports`, `logs`, `switch`) and some guardrails are missing.
 `wtm --version` tells you what is installed, `doctor` says when a newer one is
-published, and an older binary is the user's to upgrade, not yours.
+published, and an older binary is the user's to upgrade, not yours. What arrived in
+which version is in wtm's
+[changelog](https://github.com/Hy0sh/worktree-manager/blob/main/CHANGELOG.md).
+
+- `wtm tui` is a live dashboard for the user's terminal: it is interactive, never run
+  it yourself, suggest it.
+- `start` and `wtm ports` read the addresses a reverse proxy routes to (Traefik,
+  nginx-proxy, caddy-docker-proxy) from the proxy itself: do not add a `wtm.url` label
+  to a project, wtm no longer reads it.
 
 If the project is not registered, switch to Setup mode rather than improvising.
 
