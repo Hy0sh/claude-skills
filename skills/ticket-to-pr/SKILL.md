@@ -185,6 +185,8 @@ Milestones, each one dispatchable and each one verifiable on its own. Write it t
 
 Each milestone says what it delivers, the files it creates or modifies, how it is verified (the test, or what is observed on the running app), and which edge case settled at GATE 1 it implements. After the milestones, the risks: what the plan assumes without having checked it, a migration, a file another open branch also touches.
 
+The plan also says how the work ships: **one pull request per 800 changed lines at most**, migrations and generated files aside. Over that, cut it into stacked PRs along the milestones (foundation first, following the `overlapping-prs` skill of this plugin), each one reviewable alone. Review findings grow with PR size, much faster than its line count: a single PR is kept above the limit only when the user says so at GATE 2.
+
 A milestone that adds or changes a list, a batch or a computation over many rows states its query budget: the number of queries at two volumes (it must not grow with the rows), measured in the test, and the response time on the project's volume data set when it has one. A count that grows with the rows is a defect of the milestone, not a later optimisation.
 
 **GATE 2.** Present the plan and stop: no code and no subagent before an explicit go. A change asked here goes into the plan, which is presented again. When the work is relayed (an orchestrator or a supervising agent stands between you and the user), the plan goes to whoever relays it, and the go comes back the same way: a plan nobody approved is not approved.
@@ -208,7 +210,7 @@ One **fresh** subagent follows the `review-diff` skill of this plugin — not a 
 
 Then the loop, bounded on purpose:
 
-1. Each blocker and major the review confirmed at runtime is fixed by a sonnet subagent, one per finding, as in step 6.
+1. Each blocker and major the review confirmed at runtime is fixed by a sonnet subagent, one per finding, as in step 6. So is every suggestion about a computation, a scope or permission, or data integrity, including one downgraded only for want of a runtime observation: the severity gate protects a colleague from noise, and in a self-review a false positive costs an agent's minutes while a missed defect costs a review round. Each is checked against the code first, and dropped with its reason when the code proves it wrong.
 2. **One** re-review by a fresh `review-diff` subagent, on the files the fixes touched (`git diff origin/<base> -- <those files>`), with the previous findings to account for: addressed, partly, not.
 3. Whatever is still open goes to the GATE 3 report. No third round: a review and a fix that keep answering each other spin, and the user arbitrates a disagreement better than another pass.
 

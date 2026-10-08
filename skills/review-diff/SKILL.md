@@ -17,6 +17,7 @@ This skill reviews a diff and produces findings. It edits no file and writes not
 | The stack to observe on | the current worktree's, through `wtm exec <branch> -- …` (see the `wtm` skill); none → say so |
 | The expected behaviour | the PR body, or the ticket and the edge cases settled for it |
 | The mergeability verdict | not this skill's job: the caller has it (the CI on a PR, the local gates in `ticket-to-pr`) |
+| The review checklist | `~/.config/hy0sh-skills/repos/<owner>/<repo>/review.md` when it exists (`<owner>/<repo>` from `gh repo view --json nameWithOwner`); none → skip it |
 
 The base defaults to `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`, after a `git fetch origin`.
 
@@ -31,6 +32,12 @@ Proceed dimension by dimension, covering only the ones the diff actually touches
 *Performance* is reviewed whenever the diff adds a loop, a serializer field or a helper called per row: a query inside a loop, a related object read without `select_related`/`prefetch_related` (or the stack's equivalent), a filter left unbounded (no date, no tenant), the same computation repeated per item. Count what a request costs at 1 and at N rows from the code; a count that grows with N is at least a major when the path serves a list or a batch.
 
 Whatever the dimensions, ask of every new path the diff adds **who triggers it today**: a screen and its action, an endpoint and the front component that calls it, a scheduled task, an import, traced in the code of the reviewed branch. A path nothing reachable triggers (a back-end use case no screen calls, a state no user action produces) is reported once, at the top of the output, as `Unreachable today: <path> — <why>`. It is information, not a defect: never a blocker or a major on that ground alone, and the effort the diff spends on it (performance, edge cases) is weighed against it.
+
+Then look **outside the diff**, where reviewers find what the author missed. For every rule, filter, scope, permission or computation the diff adds or changes, find its **twins**: the other places that implement the same thing (the back-end check of a front-end rule and the reverse, the serializer and the export, the screen and the bulk action, the view permission and the condition that shows its button, the route guard and the menu entry, the component and the hook). Grep for them on the reviewed branch and compare: two implementations that disagree on one input are a defect, whichever one the diff touched. Then its **neighbours**: the sibling endpoints of the same list or module, which must apply the same scope and filter as the one the diff changed. A twin or a neighbour left unchanged when it should have followed is reported against the diff.
+
+When a review checklist was found, walk each of its items against the diff and report the ones that apply and fail like any other finding; an item the diff does not touch is skipped silently.
+
+Then read the diff's own additions for what they make superfluous: a guard, a branch or a validation an upstream layer already guarantees (check the caller or the serializer on the reviewed branch), a helper or a parameter no caller uses once the diff is applied, a field kept only for the code it replaced. Dead code the diff creates is reported against the diff; dead code that was already there goes under pre-existing defects.
 
 **Self-verify every blocker and major before reporting it.** For each, re-read the real code and trace the full flow (e.g. frontend → backend) while actively trying to **refute your own finding**: is it already neutralised upstream? a misread of the base branch? an i18n "missing key" that pluralisation resolves? Drop refuted findings, and surface notable ones in a short "dismissed false positives" note so the reader sees what was considered and dismissed. Dedupe findings that recur across dimensions. Suggestions and positives need no verification.
 
