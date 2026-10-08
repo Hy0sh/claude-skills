@@ -128,7 +128,9 @@ Locate the technical surface: which layers, front or back, migrations or not. Th
 - a business rule or a locked decision read at step 2 bis that contradicts the ticket, or a `QO-XXX` still open on exactly the point the ticket asks you to settle
 - anything the ticket needs that lives outside the application code (Helm, Ansible, cluster env)
 
-Report: verdict, retained scope, **min/max range plus a risk level**, open questions, and the roles worked out in "What the project provides". When no project skill covers the acceptance check, or the commits and PR, the report ends on those questions: for each, a skill to follow or a description.
+Then trace the **entry point**: what produces, today on the up-to-date base, the data or the state the ticket handles — a screen and the action on it, an endpoint and the front component that calls it, a scheduled task, an import. Follow it in the code (the component calls the endpoint, the route is mounted, the flag gating it is on somewhere), never in the ticket's wording. A back-end path no screen calls, a state no user action can reach, a feature whose screen was ruled out by a decision: the ticket works on a zone **unreachable today**. That alone does not block it, the user may keep it on purpose ahead of a request, but it is announced at GATE 1, never discovered later by a reviewer.
+
+Report: verdict, retained scope, **min/max range plus a risk level**, the entry point in one line (`Reached from: <screen › action | endpoint called by <component> | task | import>` or `Unreachable today: <why> — reachable once <what is missing>`), open questions, and the roles worked out in "What the project provides". When no project skill covers the acceptance check, or the commits and PR, the report ends on those questions: for each, a skill to follow or a description.
 
 The report also lists the **edge cases** the ticket does not settle, one line each, with the reading you propose. Walk at least:
 
@@ -140,7 +142,7 @@ The report also lists the **edge cases** the ticket does not settle, one line ea
 
 An edge case left unarbitrated is settled silently by whoever codes it. GATE 1 is where the user settles them, not the reviewer.
 
-**GATE 1.** NO-GO on an ambiguous ticket, missing criteria, or a conflict with a locked decision. Say what is missing, where the conflict is, and which question the PO must answer. Then stop: no branch, no worktree, nothing written to Jira. A NO-GO is a deliverable, not a failure.
+**GATE 1.** NO-GO on an ambiguous ticket, missing criteria, or a conflict with a locked decision. Say what is missing, where the conflict is, and which question the PO must answer. Then stop: no branch, no worktree, nothing written to Jira. A NO-GO is a deliverable, not a failure. An unreachable zone is not a NO-GO by itself: put it to the user as a question, keep it as is or wait for its entry point, with the consequence of each.
 
 ## 4. Worktree and stack
 
