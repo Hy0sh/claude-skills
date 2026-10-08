@@ -139,6 +139,7 @@ The report also lists the **edge cases** the ticket does not settle, one line ea
 - several of the same at once (several people, several lines, several tenants)
 - what already exists when the change ships: rows created before it, objects already in a state the new rule would forbid
 - who sees and changes it when access is restricted to a subset (scope, tenant, role)
+- volume: how many rows the largest tenant holds for what the ticket reads or loops over (families, children, lines, events), and which new path runs once per row — the place an N+1 hides
 
 An edge case left unarbitrated is settled silently by whoever codes it. GATE 1 is where the user settles them, not the reviewer.
 
@@ -183,6 +184,8 @@ Transition refused, or the status absent from this workflow? Report it and ask. 
 Milestones, each one dispatchable and each one verifiable on its own. Write it to the session scratchpad, never into the repository: the diff of this branch carries the ticket's code and nothing else.
 
 Each milestone says what it delivers, the files it creates or modifies, how it is verified (the test, or what is observed on the running app), and which edge case settled at GATE 1 it implements. After the milestones, the risks: what the plan assumes without having checked it, a migration, a file another open branch also touches.
+
+A milestone that adds or changes a list, a batch or a computation over many rows states its query budget: the number of queries at two volumes (it must not grow with the rows), measured in the test, and the response time on the project's volume data set when it has one. A count that grows with the rows is a defect of the milestone, not a later optimisation.
 
 **GATE 2.** Present the plan and stop: no code and no subagent before an explicit go. A change asked here goes into the plan, which is presented again. When the work is relayed (an orchestrator or a supervising agent stands between you and the user), the plan goes to whoever relays it, and the go comes back the same way: a plan nobody approved is not approved.
 
