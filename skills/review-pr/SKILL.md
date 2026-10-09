@@ -122,6 +122,10 @@ Then provide a structured review:
 ## ⚠️ Major Issues
 - Important concerns affecting maintainability or correctness
 
+## ❔ Not confirmed — runtime out of reach
+- Blocker/major candidates `review-diff` could not observe, each with what blocked it; omit the heading when there are none
+- The candidate accounting line from `review-diff`: produced, confirmed, refuted, out of reach
+
 ## 💡 Suggestions (minor improvements)
 - Code quality, readability, naming, etc.
 
