@@ -209,7 +209,7 @@ Then the loop, bounded on purpose:
 2. **One** re-review by a fresh `review-diff` subagent, on the files the fixes touched (`git diff origin/<base> -- <those files>`), with the previous findings to account for: addressed, partly, not.
 3. Whatever is still open goes to the GATE 3 report. No third round: a review and a fix that keep answering each other spin, and the user arbitrates a disagreement better than another pass.
 
-Suggestions are listed at GATE 3, applied only if the user says so. Pre-existing defects are reported, never fixed here: they belong to their own ticket unless the user decides otherwise.
+Candidates the review could not confirm because runtime was out of reach are not fixed blind: they go to GATE 3 by name, with what blocked the observation and the review's candidate accounting line, and the user decides. Suggestions are listed at GATE 3, applied only if the user says so. Pre-existing defects are reported, never fixed here: they belong to their own ticket unless the user decides otherwise.
 
 ## 7. Acceptance check
 
