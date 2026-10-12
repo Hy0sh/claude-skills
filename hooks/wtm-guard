@@ -73,7 +73,7 @@ while IFS= read -r seg; do
   if [ "${first##*/}" = "wtm" ]; then
     read -r verb _ <<< "$rest"
     if [ "$verb" = "create" ] && [ "$confined" -eq 1 ]; then
-      deny "Session isolée par Claude Code : les éditions sont confinées à \`.claude/worktrees/\`, donc un worktree créé ailleurs sera illisible pour Edit/Write. Ce worktree-ci s'adopte sur place : \`git switch <branche>\` (ou \`git switch -c <branche>\` si elle n'existe pas encore), puis \`wtm adopt -y\`. Le switch passe AVANT l'adoption, wtm keyant un worktree par sa branche."
+      deny "Session isolée par Claude Code : les éditions sont confinées à \`.claude/worktrees/\`, donc un worktree créé ailleurs sera illisible pour Edit/Write. Ce worktree-ci s'adopte sur place : \`git switch <branche>\` (ou \`git switch -c <branche>\` si elle n'existe pas encore), puis \`wtm adopt -y\`. Le switch passe AVANT l'adoption, wtm keyant un worktree par sa branche. Lance l'adopt dans la foulée du switch, avant de lire le code : remis à plus tard, il s'oublie, et le jour où un finding demande une preuve runtime, il n'y a pas de stack pour la fournir."
     fi
     continue
   fi
