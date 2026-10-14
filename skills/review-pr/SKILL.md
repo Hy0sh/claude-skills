@@ -43,6 +43,8 @@ PR branches are also **remote-authoritative**: contributors force-push freely. A
 
 The user's own worktree is never touched on this route, so there is no branch to restore when the review ends.
 
+Exception: a session that may only write in the worktree it runs in cannot use a worktree `wtm create` cuts elsewhere. There, put the PR branch in the current worktree and adopt it, as the `wtm` skill describes, then steps 3–4 apply to it; at the end, give it back the branch it had.
+
 ### Route B — project not registered with `wtm`
 
 1. Verify the worktree is clean (`git status`). If not, **stop and ask the user** — never stash or discard work.

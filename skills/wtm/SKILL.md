@@ -95,7 +95,8 @@ Every worktree command accepts `[project] <branch>`. A first argument that names
 registered project is the project; otherwise everything is a branch of the current
 directory's project. So `wtm start feat/x` from inside the repo, `wtm start my-app
 feat/x` from anywhere. `adopt` is the one whose branch is optional: with none it takes
-the worktree of the current directory.
+the worktree of the current directory. Its branch names the worktree to adopt, the one
+that has it checked out; it checks nothing out.
 
 ## Lifecycle
 
@@ -223,7 +224,9 @@ refuses a name already taken. For a branch nobody has cut yet, `wtm adopt --as <
 -y` does both in one move. Either way the switch happens before the adoption, never
 after: that order is what the next paragraph is about. At the end of the session,
 `wtm remove` from inside that worktree is safe: it takes the stack and leaves the
-directory the session runs in, Claude Code having cut it.
+directory the session runs in, Claude Code having cut it. Note the branch it had before
+the switch and `git switch` back to it after that `remove`, leaving the worktree as it
+was found.
 
 **One worktree, one branch.** wtm keys a worktree by the branch git reports for it,
 so switching branches inside one (a `gh pr checkout`, a `git switch`) breaks the pair.
