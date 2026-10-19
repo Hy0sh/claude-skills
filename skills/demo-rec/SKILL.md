@@ -1,36 +1,36 @@
 ---
-name: demo-film
-description: Use when a web app, or a command line tool through a terminal, has to be filmed doing something — a demo video of a feature, a pull request, a bug reproduction — with `demo-film`, a Go CLI that plays a declarative YAML scenario headless, checks that each expected text is on screen, and writes an mp4 with captions under the page plus a chapter list. Covers installing it, writing a scenario in its closed vocabulary, the check / rehearse / film cycle, reading its errors, cutting long waits, filming a long demo in parts joined at the end, and the traps of real apps (menus, home-made widgets, native date inputs, iframes, new tabs).
+name: demo-rec
+description: Use when a web app, or a command line tool through a terminal, has to be filmed doing something — a demo video of a feature, a pull request, a bug reproduction — with `demo-rec`, a Go CLI that plays a declarative YAML scenario headless, checks that each expected text is on screen, and writes an mp4 with captions under the page plus a chapter list. Covers installing it, writing a scenario in its closed vocabulary, the check / rehearse / film cycle, reading its errors, cutting long waits, filming a long demo in parts joined at the end, and the traps of real apps (menus, home-made widgets, native date inputs, iframes, new tabs).
 ---
 
-# Filming a web app with demo-film
+# Filming a web app with demo-rec
 
 Chat with the user in their language; this skill file stays in English.
 
-`demo-film` turns a scenario (YAML, data only) into `demo.mp4` and `chapters.md`. The scenario names what to do and what must be on screen; the tool plays it the same way every time, checks every expectation, and refuses to film a step whose expectation is not met. Never drive Playwright by hand to make a demo video: what the tool cannot express is a gap to report, not a reason to script around it.
+`demo-rec` turns a scenario (YAML, data only) into `demo.mp4` and `chapters.md`. The scenario names what to do and what must be on screen; the tool plays it the same way every time, checks every expectation, and refuses to film a step whose expectation is not met. Never drive Playwright by hand to make a demo video: what the tool cannot express is a gap to report, not a reason to script around it.
 
-The tool's README (https://github.com/Hy0sh/demo-film) is the reference for the vocabulary and the rules; this skill is how to use it well.
+The tool's README (https://github.com/thetribeio/scenario-demo-recorder) is the reference for the vocabulary and the rules; this skill is how to use it well.
 
 ## 0. Prerequisites
 
-`demo-film --version` answers, `ffmpeg` is on the PATH, and Chromium is installed (`rehearse` says so if not). Anything missing: give the human the command and stop — never install it yourself.
+`demo-rec --version` answers, `ffmpeg` is on the PATH, and Chromium is installed (`rehearse` says so if not). Anything missing: give the human the command and stop — never install it yourself.
 
 | Missing | Command for the human |
 |---|---|
-| `demo-film` | `go install github.com/Hy0sh/demo-film/cmd/demo-film@latest` (or a release binary) |
-| the browser | `demo-film install` |
+| `demo-rec` | `go install github.com/thetribeio/scenario-demo-recorder/cmd/demo-rec@latest` (or a release binary); the repository is private: a GitHub account with access, `gh auth setup-git` and `go env -w GOPRIVATE=github.com/thetribeio/*` first |
+| the browser | `demo-rec install` |
 | `ffmpeg` | the system package manager, e.g. `brew install ffmpeg` |
 | `ttyd` (terminal demos only) | `brew install ttyd`, `apt install ttyd` |
 
-`terminal`, `cut`, `join`, `watermark` and `nth` on `click` need demo-film 0.4.0 or later, `wait: {gone}`, `wait: {enabled}` and `rehearse --paced` 0.5.0 or later: on an older version, `check` rejects them as unknown keys.
+`demo-rec` was called `demo-film` up to 0.6.1: a `demo-film` still installed is the old tool, replace it with `demo-rec`.
 
 ## 1. The cycle
 
 ```
-demo-film check scenario.yaml            # no browser: schema and rules
-demo-film rehearse scenario.yaml -o dir  # plays everything, no pause, no video (seconds)
-demo-film rehearse --paced scenario.yaml # at the take's pace, still no video: the last check before the take
-demo-film film scenario.yaml -o dir      # the take: demo.mp4 + chapters.md
+demo-rec check scenario.yaml            # no browser: schema and rules
+demo-rec rehearse scenario.yaml -o dir  # plays everything, no pause, no video (seconds)
+demo-rec rehearse --paced scenario.yaml # at the take's pace, still no video: the last check before the take
+demo-rec film scenario.yaml -o dir      # the take: demo.mp4 + chapters.md
 ```
 
 - Iterate with `rehearse` only; film once it is green. A take lasts the length of the video.
@@ -45,10 +45,10 @@ demo-film film scenario.yaml -o dir      # the take: demo.mp4 + chapters.md
 ```yaml
 title: "Short title of the demo"
 base_url: http://app.localhost:3000
-locale: fr                 # optional: i18next, the browser's language (native date inputs, Intl) and, from 0.6.0, the band's and cards' words
+locale: fr                 # optional: i18next, the browser's language (native date inputs, Intl) and the band's and cards' words
 hide: [".dev-toolbar"]     # optional: dev overlays hidden while filming
 speed: 1                   # optional: 0.25-4, the whole video, gestures and captions (2 = twice as fast)
-labels: {see: "Tu dois voir :"}   # optional: overrides one of the locale's words; on demo-film before 0.6.0, give all four (step, check, see, later) or the missing ones stay English
+labels: {see: "Tu dois voir :"}   # optional: overrides one of the locale's words
 watermark: {text: "© Some Co", position: bottom-right}   # optional: or image: logo.png; a corner of the page, never the band
 steps:
   - caption: what I do, in one sentence     # shown before the actions
@@ -124,14 +124,14 @@ The typed command stays on screen: a `wait` or `see` on a word it contains match
 Past a few minutes, or when the demo changes accounts, film **one scenario per part** and join them:
 
 ```
-demo-film film agent.yaml -o parts/1
-demo-film film citizen.yaml -o parts/2
-demo-film join parts/1 parts/2 -o final      # --no-cards: no title cards
+demo-rec film agent.yaml -o parts/1
+demo-rec film citizen.yaml -o parts/2
+demo-rec join parts/1 parts/2 -o final      # --no-cards: no title cards
 ```
 
 - A failing rehearsal replays only its part; a failing take loses only its part.
 - Each part starts in a fresh browser: cut where the account changes, and log in at the start of the next part.
-- Every part has the same `viewport` and `speed`, or `join` refuses it by name; parts filmed with demo-film older than 0.4.0 cannot be joined.
+- Every part has the same `viewport` and `speed`, or `join` refuses it by name; parts filmed with `demo-film` older than 0.4.0 cannot be joined.
 - `join` puts a title card with each part's `title` before it (quote a title containing `:` in YAML) and merges the chapters, one section per part, times shifted (to the second: a joined time may be a second early). Steps keep their per-part numbering. The card shows the `# Title` line of each part's `chapters.md`: to renumber the parts ("1. Agent", "2. Citizen"), edit that line and join again, without filming again.
 
 How a long film holds together:
