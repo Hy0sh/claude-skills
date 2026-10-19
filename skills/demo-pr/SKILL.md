@@ -1,6 +1,6 @@
 ---
 name: demo-pr
-description: Use when a pull request or a branch has to be shown working to a human before it is marked ready or merged — a reviewer, a PO or the author wants to see the change run, or an orchestrator collects one demo per worker. The agent first decides whether a video is worth it (a user journey across several screens, a complex business flow) or two or three screenshots suffice; when it is, it prepares the data, films the nominal path only with `demo-film`, captures the other states as screenshots, and hands them over; the human answers once, ok or ko with the step. Does not change the code.
+description: Use when a pull request or a branch has to be shown working to a human before it is marked ready or merged — a reviewer, a PO or the author wants to see the change run, or an orchestrator collects one demo per worker. The agent first decides whether a video is worth it (a user journey across several screens, a complex business flow) or two or three screenshots suffice; when it is, it prepares the data, films the nominal path only with `demo-rec`, captures the other states as screenshots, and hands them over; the human answers once, ok or ko with the step. Does not change the code.
 argument-hint: [branch|PR]
 ---
 
@@ -8,7 +8,7 @@ argument-hint: [branch|PR]
 
 Chat with the user in their language; this skill file stays in English.
 
-A green test proves what the agent checked; a demo shows the human what the change does. The demo is a **video**: the agent drives the app headless, the human watches when they want, at their pace, and answers once. Filming is done with the `demo-film` skill — load it; this skill is everything around it.
+A green test proves what the agent checked; a demo shows the human what the change does. The demo is a **video**: the agent drives the app headless, the human watches when they want, at their pace, and answers once. Filming is done with the `demo-rec` skill — load it; this skill is everything around it.
 
 ## 0. Film only when a video is worth it
 
@@ -41,7 +41,7 @@ The human's time and the take's length are the cost; nothing filmed may be broke
 
 ## 3. Film
 
-With the `demo-film` skill: write the scenario, `check`, `rehearse` until green, reset, `film` once. Then capture the other states as screenshots on the same stack.
+With the `demo-rec` skill: write the scenario, `check`, `rehearse` until green, reset, `film` once. Then capture the other states as screenshots on the same stack.
 
 - Captions and expectations in the human's language (`labels`), written from the user's side of the screen.
 - Each `check` step's `see` quotes the criterion's observable result: texts, names, counts.
@@ -53,7 +53,7 @@ With the `demo-film` skill: write the scenario, `check`, `rehearse` until green,
 - One message: the video's path, what the demo covers and what it does not (criteria not filmed, checks done outside the video), and the question: **ok, or ko with the step and what you see**.
 - Under an orchestrator, the same message goes to the orchestrator, which relays it.
 - After an ok, and once the human agrees to post it: put **the video alone** in the PR body, **right after its summary section** (the first one: TL;DR, in short), never at the bottom with the technical details, where reviewers do not scroll; no summary line, no chapter table. The screenshots go where the repo's PR convention puts them (read it first: its commit/PR skill or notes). Fetch the body, insert `![](./<file>.mp4)` **alone in its paragraph** at that place, keep everything else as it is, then `gh pr edit <PR> --body-file <file> --attach <video>`: `gh` rewrites the path to the uploaded URL and GitHub renders a player (anywhere else it is only a link). A PR comment only when the body has no summary section.
-- Size: GitHub takes videos up to 10 MB on a free plan, 100 MB on a paid one (H.264 `.mp4`, which `demo-film` writes). Over the limit, say so and offer a shorter cut (the steps that matter) rather than a blurrier one.
+- Size: GitHub takes videos up to 10 MB on a free plan, 100 MB on a paid one (H.264 `.mp4`, which `demo-rec` writes). Over the limit, say so and offer a shorter cut (the steps that matter) rather than a blurrier one.
 
 ## 5. A ko
 
