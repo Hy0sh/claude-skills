@@ -477,6 +477,10 @@ observe through the main stack's ports, they serve the other code.
   migrates on top of it. `wtm backup refresh <project>` saves the replay. A dump
   reported as up to date forever means `migrations_path` does not match the project's
   layout, not that nothing moved.
+- A restored worktree whose app data is there but whose accounts are not (logins
+  fail, ids point at nothing) keeps them in a second database the dump never held.
+  `extra_databases` (see setup) brings it along; the database logs then show one
+  `wtm: restoring` line per database, then `restore done`.
 - A worktree missing one of the files its stack mounts fails deep inside docker on a
   raw mount error. Every `start` lays the links, the `*.env` copies and the compose
   overrides back down, so that is the repair; what the worktree already holds is left
@@ -587,6 +591,16 @@ Two things to read in that output rather than discover later:
   unreachable, cannot seed file-backed data`) → `--start-dependencies` (**0.15.0**),
   which brings up what the application service declares in `depends_on` for the time
   of the refresh and takes it back down with it. Off by default
+- **A second database the seed writes to** — only when the same Postgres server holds
+  another database the app depends on, an identity provider's whose account ids the
+  app stores: only `{{database}}` is dumped otherwise, and a restored worktree gets
+  ids that point at nothing, so nobody logs in → `--extra-database <name>`,
+  repeatable (**1.3.0**, postgres only). Its name is fixed in the compose file, so it
+  is dumped as the refresh leaves it on the project's real server: the seed must find
+  its accounts already there without failing, and an init script of the project's
+  own that creates that database must skip it when it exists, since it runs after
+  the restore. Every wtm writing the registry must be 1.3.0 or later: an older one
+  drops the field when it saves
 - **How slowly the stack boots** — only for a project whose services install their
   dependencies at startup and outlast the built-in bounds (a minute for the database,
   ten for the application) → `--ready-timeout`, `--ready-interval`
