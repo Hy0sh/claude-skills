@@ -13,14 +13,14 @@ The markdown stays the source: agents implement it, review against it, diff it. 
 ## The file
 
 - **Next to the markdown, same name, `.html`**: `plans/SHOP-12/plan.md` → `plans/SHOP-12/plan.html`. Tools that show the plan find the page this way; any other name or folder and it is never shown.
-- One self-contained file: CSS inline, **no JavaScript**, no image or script from the network (a Google Fonts stylesheet is the one exception). Images the plan links to are referenced by the same relative path.
+- One self-contained file: CSS inline, no JavaScript but the choice script below, no image or script from the network (a Google Fonts stylesheet is the one exception). Images the plan links to are referenced by the same relative path.
 - Never touch the markdown. A plan that changes gets its page regenerated.
 - In the user's language, whatever the markdown's.
 
 ## What the page is, in this order
 
 1. **Header**: ticket, title, one line of goal, the source markdown's path, then four or five facts as tiles (PRs, size, migrations, estimate, risk).
-2. **Choices to make**, if the plan has any: one card each, its options under **the same letters as the markdown** (the user answers against the markdown), the recommended one highlighted, and below them **what each option changes concretely** for a named user or a number.
+2. **Choices to make**, if the plan has any: one card each, its options under **the same letters as the markdown** (the user answers against the markdown), the recommended one highlighted, and below them **what each option changes concretely** for a named user or a number. Options only: no field for another answer, the tool that shows the page collects that.
 3. **Rules involved** (business rules, past decisions the plan cites): a strip of small cards, the rule's id and one line each.
 4. **Journey**: what the user will see, as a row of mini-screens (a URL bar, the rows or buttons that matter), the denied cases as red cards underneath.
 5. **What the change touches**: one row per layer (screens, front data, contract, procedures, use cases, repository, tables), each file a box marked created, modified or reused.
@@ -30,6 +30,29 @@ The markdown stays the source: agents implement it, review against it, diff it. 
 9. **Open questions** for someone outside (a PO, a client), as one callout at the end.
 
 Leave a section out when the plan has nothing for it. Every fact on the page comes from the markdown: nothing invented, nothing summarised away.
+
+## Choices are clickable
+
+A tool that shows the page next to its own answer form (acw's board does) takes a click on an option as the answer. Each option carries the choice's number, in the markdown's order from 1, and its letter:
+
+```html
+<div class="opt" data-choice="1" data-option="a">…</div>
+```
+
+and the page ends with this script, as is:
+
+```html
+<script>
+document.addEventListener("click", e => {
+  const o = e.target.closest("[data-choice][data-option]");
+  if (!o) return;
+  document.querySelectorAll(`[data-choice="${o.dataset.choice}"]`).forEach(x => x.classList.toggle("picked", x === o));
+  parent.postMessage({ type: "plan-choice", choice: Number(o.dataset.choice), option: o.dataset.option }, "*");
+});
+</script>
+```
+
+Style `.picked` so the click shows, and `cursor: pointer` on the options. Opened on its own, the page reads the same: the click only marks the option.
 
 ## Look
 
