@@ -45,6 +45,7 @@ section { display: flex; flex-direction: column; gap: 18px; }
 .chip b { color: var(--ink); font-weight: 600; }
 .chip.wait { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .chip.wait b { color: var(--accent); }
+.chip a { color: inherit; }
 .facts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .fact { background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .fact .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -214,7 +215,7 @@ footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--lin
     <h1>Voir mon relevé et ma cotisation</h1>
     <p class="lead">Le gérant ouvre la liste de ses relevés mensuels, puis le détail ligne à ligne de chacun, sans voir ceux des autres boutiques. Rendu visuel du plan ; la source reste <code>plan.md</code>, dans le même dossier.</p>
     <div class="chips">
-      <span class="chip wait">Plan déposé <b>#118</b>, en attente de votre accord</span>
+      <span class="chip wait">Plan déposé <b>#118</b>, en attente de votre accord : <a href="#choices"><b>2 choix</b> en fin de page</a></span>
       <span class="chip">Implémentation <b>#17</b> en file</span>
       <span class="chip">Branche <b class="mono">feat/SHOP-39-my-statements</b></span>
       <span class="chip">Base <b class="mono">feat/SHOP-37-statements-screens</b></span>
@@ -227,27 +228,6 @@ footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--lin
       <div class="fact"><span class="v">Moyen</span><span class="k">risque : filtre R7, rebase sur SHOP-37</span></div>
     </div>
   </header>
-
-  <section>
-    <div class="eyebrow">À trancher</div>
-    <h2>Deux choix à valider</h2>
-    <div class="choices">
-      <article class="choice">
-        <div class="q">1. Le gérant voit-il son relevé avant la publication (US-030, V3) ?</div>
-        <div class="opt reco" data-choice="1" data-option="a"><span class="l">a</span><span class="t">Visible dès la génération. US-030 ajoutera <code>releve.publie_le</code> et filtrera dessus.<span class="tag">Reco</span></span></div>
-        <div class="opt" data-choice="1" data-option="b"><span class="l">b</span><span class="t">Publication minimale dans SHOP-39 : colonne, procédure <code>admin.releves.publier</code>, filtre gérant. Une migration en plus, et aucun bouton « Publier » prévu.</span></div>
-        <p class="sees">Avec (a), Léa voit septembre dès que Marc clique « Générer » le 1er octobre, et les nouveaux montants s'il régénère. Avec (b), Léa ne voit rien tant qu'un admin n'a pas appelé l'API.</p>
-        <div class="rules"><span class="rule">R7</span><span class="rule">US-030</span></div>
-      </article>
-      <article class="choice">
-        <div class="q">2. Le gérant d'une boutique suspendue garde-t-il l'accès (US-022) ?</div>
-        <div class="opt reco" data-choice="2" data-option="a"><span class="l">a</span><span class="t">Il garde l'accès à tous ses relevés. C'est déjà le comportement du rôle gérant, suspendu ou non.<span class="tag">Reco</span></span></div>
-        <div class="opt" data-choice="2" data-option="b"><span class="l">b</span><span class="t">Il le perd pendant la suspension : filtre <code>boutique.statut = 'active'</code> sur ses deux lectures.</span></div>
-        <p class="sees">Une boutique suspendue honore ses commandes acceptées (D-003) et doit leurs commissions. Avec (b), sa gérante aurait une liste vide alors qu'on lui facture ces montants.</p>
-        <div class="rules"><span class="rule">R7</span><span class="rule">D-003</span><span class="rule">R3</span></div>
-      </article>
-    </div>
-  </section>
 
   <section>
     <div class="eyebrow">Ce que verra Léa</div>
@@ -441,6 +421,27 @@ footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--lin
     <div class="po">
       <div class="eyebrow">Question pour le PO</div>
       <p><b>Date de prélèvement du total dû.</b> La maquette affiche « prélevé le 10/10/2026 », mais rien dans les specs ne dit si le total est prélevé ni à quelle date. À poser au PO. D'ici là, l'écran n'affiche pas de date.</p>
+    </div>
+  </section>
+
+  <section id="choices">
+    <div class="eyebrow">À trancher</div>
+    <h2>Deux choix à valider</h2>
+    <div class="choices">
+      <article class="choice">
+        <div class="q">1. Le gérant voit-il son relevé avant la publication (US-030, V3) ?</div>
+        <div class="opt reco" data-choice="1" data-option="a"><span class="l">a</span><span class="t">Visible dès la génération. US-030 ajoutera <code>releve.publie_le</code> et filtrera dessus.<span class="tag">Reco</span></span></div>
+        <div class="opt" data-choice="1" data-option="b"><span class="l">b</span><span class="t">Publication minimale dans SHOP-39 : colonne, procédure <code>admin.releves.publier</code>, filtre gérant. Une migration en plus, et aucun bouton « Publier » prévu.</span></div>
+        <p class="sees">Avec (a), Léa voit septembre dès que Marc clique « Générer » le 1er octobre, et les nouveaux montants s'il régénère. Avec (b), Léa ne voit rien tant qu'un admin n'a pas appelé l'API.</p>
+        <div class="rules"><span class="rule">R7</span><span class="rule">US-030</span></div>
+      </article>
+      <article class="choice">
+        <div class="q">2. Le gérant d'une boutique suspendue garde-t-il l'accès (US-022) ?</div>
+        <div class="opt reco" data-choice="2" data-option="a"><span class="l">a</span><span class="t">Il garde l'accès à tous ses relevés. C'est déjà le comportement du rôle gérant, suspendu ou non.<span class="tag">Reco</span></span></div>
+        <div class="opt" data-choice="2" data-option="b"><span class="l">b</span><span class="t">Il le perd pendant la suspension : filtre <code>boutique.statut = 'active'</code> sur ses deux lectures.</span></div>
+        <p class="sees">Une boutique suspendue honore ses commandes acceptées (D-003) et doit leurs commissions. Avec (b), sa gérante aurait une liste vide alors qu'on lui facture ces montants.</p>
+        <div class="rules"><span class="rule">R7</span><span class="rule">D-003</span><span class="rule">R3</span></div>
+      </article>
     </div>
   </section>
 
