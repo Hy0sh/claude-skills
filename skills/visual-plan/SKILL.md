@@ -24,17 +24,17 @@ The markdown stays the source: agents implement it, review against it, diff it. 
 
 ## What the page can show
 
-What the reader needs to decide comes first: the header, then the choices. After them, draw what this plan is about. Ask what the reader must see to approve it, and give that a diagram; the list below is a menu, not a checklist.
+The header first, then what this plan is about, and the choices last: the reader decides once they have seen what the plan does and why. Ask what the reader must see to approve it, and give that a diagram; the list below is a menu, not a checklist.
 
-1. **Header**: ticket, title, one line of goal, the source markdown's path, then four or five facts as tiles (PRs, size, migrations, estimate, risk).
-2. **Choices to make**, if the plan has any: one card each, its options under **the same letters as the markdown** (the user answers against the markdown), the recommended one highlighted, and below them **what each option changes concretely** for a named user or a number. Options only: no field for another answer, the tool that shows the page collects that.
-3. **Rules involved** (business rules, past decisions the plan cites): a strip of small cards, the rule's id and one line each.
-4. **Journey**: what the user will see, as a row of mini-screens (a URL bar, the rows or buttons that matter), the denied cases as red cards underneath.
-5. **What the change touches**: one row per layer (screens, front data, contract, procedures, use cases, repository, tables), each file a box marked created, modified or reused.
-6. **Decisions in the code** (access rules, branching logic): a tree read top to bottom, each question with its answers as labelled branches under it, each outcome a box, with the query count of each branch when the plan gives it. The boxes are HTML (flex or grid, with padding), never SVG text, which does not wrap: a label longer than its box runs into the border at every width. SVG, if any, only draws the connectors between them.
-7. **Merge order and stack**, when other branches are involved: a vertical line of PRs with their state.
-8. **Milestones** as cards; **edge cases** as a grid of situation → behaviour; **shared files** as a matrix across the branches that touch them.
-9. **Open questions** for someone outside (a PO, a client), as one callout at the end.
+1. **Header**: ticket, title, one line of goal, the source markdown's path, then four or five facts as tiles (PRs, size, migrations, estimate, risk), and how many choices wait at the end of the page.
+2. **Rules involved** (business rules, past decisions the plan cites): a strip of small cards, the rule's id and one line each.
+3. **Journey**: what the user will see, as a row of mini-screens (a URL bar, the rows or buttons that matter), the denied cases as red cards underneath.
+4. **What the change touches**: one row per layer (screens, front data, contract, procedures, use cases, repository, tables), each file a box marked created, modified or reused.
+5. **Decisions in the code** (access rules, branching logic): a tree read top to bottom, each question with its answers as labelled branches under it, each outcome a box, with the query count of each branch when the plan gives it. The boxes are HTML (flex or grid, with padding), never SVG text, which does not wrap: a label longer than its box runs into the border at every width. SVG, if any, only draws the connectors between them.
+6. **Merge order and stack**, when other branches are involved: a vertical line of PRs with their state.
+7. **Milestones** as cards; **edge cases** as a grid of situation → behaviour; **shared files** as a matrix across the branches that touch them.
+8. **Open questions** for someone outside (a PO, a client), as one callout.
+9. **Choices to make**, if the plan has any, closing the page: one card each, its options under **the same letters as the markdown** (the user answers against the markdown), the recommended one highlighted, and below them **what each option changes concretely** for a named user or a number. Options only: no field for another answer, the tool that shows the page collects that.
 
 Other plans call for other diagrams, in the same style:
 
