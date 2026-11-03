@@ -9,9 +9,7 @@ description: >
   agents never collide with the main stack or with each other. Covers the worktree
   lifecycle, adopting a worktree another tool cut (`claude --worktree`, `git worktree
   add`), reaching into the stack, and the isolation/runtime-proof disciplines.
-  Invoked as `/wtm setup`, it instead guides registering a project in the `wtm`
-  registry, or changing one already there.
-argument-hint: [setup]
+  Registering a project, or changing a registered one, is the `wtm-setup` skill.
 ---
 
 When communicating with the user (questions, status, summaries), write in their language.
@@ -30,13 +28,6 @@ directory's project.
 
 Read-only commands (`wtm --version`, `wtm doctor`, `wtm list`, `wtm backup list`,
 `wtm project list`) need no approval.
-
-## Modes
-
-- **`/wtm setup`** (argument `setup`) → follow the **"Setup mode"** section at the
-  bottom: interview, then propose the `wtm project create` command. Nothing else.
-- **Otherwise** → the sections below: lifecycle, working inside a worktree, and the
-  two disciplines.
 
 ## When to trigger this skill
 
@@ -87,7 +78,7 @@ which version is in wtm's
   nginx-proxy, caddy-docker-proxy) from the proxy itself: do not add a `wtm.url` label
   to a project, wtm no longer reads it.
 
-If the project is not registered, switch to Setup mode rather than improvising.
+If the project is not registered, follow the `wtm-setup` skill rather than improvising.
 
 ## Argument disambiguation
 
@@ -447,195 +438,6 @@ observe through the main stack's ports, they serve the other code.
 
 ## Troubleshooting
 
-- `wtm doctor` reports the running version and whether a newer one is published,
-  Docker VM memory against measured per-stack usage, the size of the build cache, each
-  project's stride, offset and engine, the ports two projects would both publish, the
-  ports two worktrees of one project would both publish, the recorded indices no
-  worktree stands behind, the anonymous volumes nothing mounts, and what removed
-  worktrees left behind: their volumes and the images their stacks built.
-  Those volumes matter beyond disk: the index allocator steps over any index docker
-  still holds volumes for, so a new worktree lands further out with higher ports.
-  `doctor` prints the `docker volume rm` and `docker rmi` lines that drop them, which
-  are the user's to run. Before 0.5.0 nothing dropped those images on `remove`, so a
-  long-lived machine can have a hundred of them; the build cache is only ever
-  reported, since buildkit attributes none of it to a project.
-- A port clash between two projects is not something wtm can fix for you: offsets are
-  handed out once, at registration. Either the two stacks do not run together, or
-  `port_offset` changes in `config.json` and that project's worktrees are recreated.
-  Between two worktrees of one project it is handled: since 0.10.0 the allocator skips
-  an index whose ports a recorded worktree already publishes and says so (`index 2
-  skipped: db would publish 26434, which feat/a already publishes for db_test`), which
-  happens whenever two services sit closer together than the stride, `db` on 5432 and
-  `db_test` on 5433 being the common shape. Worktrees recorded before that can still
-  overlap, and `doctor` names them with the `portStride` remedy.
-- An index recorded for a branch with no worktree pushes every new worktree one
-  further out, and makes a foreign worktree on that branch read as adopted. They come
-  from removals made outside `wtm remove`; `doctor` lists them with the `wtm remove
-  <project> <branch>` that releases each, which also takes down whatever stack was
-  left at that index.
-- A stale dump is never a blocker: `create` says how far behind it is, and the app
-  migrates on top of it. `wtm backup refresh <project>` saves the replay. A dump
-  reported as up to date forever means `migrations_path` does not match the project's
-  layout, not that nothing moved.
-- A restored worktree whose app data is there but whose accounts are not (logins
-  fail, ids point at nothing) keeps them in a second database the dump never held.
-  `extra_databases` (see setup) brings it along; the database logs then show one
-  `wtm: restoring` line per database, then `restore done`.
-- A worktree missing one of the files its stack mounts fails deep inside docker on a
-  raw mount error. Every `start` lays the links, the `*.env` copies and the compose
-  overrides back down, so that is the repair; what the worktree already holds is left
-  alone, an env file tweaked for the task being its own state rather than a stale
-  copy.
-- Ports are rebased as `20000 + project offset + default port + worktree index *
-  stride`. A project already remapping a port on purpose keeps its mapping, and a
-  git-tracked `.env` is left alone, so starting a stack never dirties the worktree:
-  the port variables then reach compose through the environment of wtm's own calls,
-  so a bare `docker compose` misses them. Go through `wtm exec` or `wtm run`, or have
-  the user load `eval "$(wtm env)"`: a URL built from `${HTTP_PORT}` otherwise comes
-  up without the worktree's port, and CORS or the front's API address breaks.
-- A file each developer keeps out of git (`.env.local`, an editor's local settings)
-  missing from a worktree: only `*.env` files follow on their own. The project lists
-  the others with `wtm project edit <project> --copy <pattern>` (**0.21.0**, repeatable,
-  replaces the set); a match git tracks keeps the branch's version.
-
----
-
-## Setup mode (`/wtm setup`)
-
-Goal: produce the right `wtm project create` command for this project, then let the
-user run it. Do not run it yourself.
-
-### 1. Frame the project
-
-```bash
-git rev-parse --show-toplevel     # from a worktree, resolve the main repository first
-wtm project list                  # already registered?
-```
-
-The directory has to be a git repository: wtm creates worktrees, and registration is
-refused outright rather than failing later, mid-refresh. A checkout whose `.git` was
-never created (a source tree downloaded rather than cloned) is not a wtm project.
-
-The registry lives in `~/.config/wtm/config.json` (relocatable via `WTM_CONFIG_DIR`).
-An already-registered project is changed with `wtm project edit <name>`, which touches
-only the flags it is given. **Never propose `project remove` then `project create` to
-change a setting**: that hands out a fresh port offset and forgets the recorded
-worktree indices, so every stack already running changes ports and compose project
-name.
-
-```bash
-wtm project edit my-app --dump --app-service backend   # add the backup to a project
-wtm project edit my-app --base main                    # change the base branch
-```
-
-### 2. Discover the compose
-
-```bash
-docker compose config --format json 2>/dev/null \
-  | python3 -c "import sys,json;d=json.load(sys.stdin);[print(f\"{s:16} image={v.get('image','-')} ports={[p.get('target') for p in v.get('ports',[])]}\") for s,v in sorted(d['services'].items())]"
-```
-
-From the output and the repository, infer: which service is the database (default
-`db`), which service runs the migrations (`backend`, `api`, `php-nginx`…), and the
-framework's migration command. A project with no compose file works too, there is
-simply no stack to start.
-
-Two things to read in that output rather than discover later:
-
-- **The database image.** wtm names the engine from it and only warns when it cannot,
-  assuming Postgres. An unrecognised image (a proxy, an internal registry name, a
-  variant nobody listed) means passing `--db-engine` explicitly, or the first refresh
-  runs `pg_dump` against something else entirely. A project on SQLite has no database
-  service to read at all, so it is chosen by hand with `--db-engine sqlite`, and its
-  snapshot is collected through the application service's bind mount: that service
-  has to mount the project directory, otherwise there is nothing to collect from.
-- **`container_name:`.** wtm rebases ports, volumes and the compose project name, but
-  a pinned container name is none of those, so the main stack and a worktree stack
-  cannot both run. Registration warns about it; the fix belongs to the project's
-  compose file, and it is worth telling the user before they discover it at the first
-  parallel start.
-
-### 3. Interview (AskUserQuestion, only what discovery cannot answer)
-
-- **Base branch** — `main`, `develop`, something else? → `--base`, but only when the
-  project really branches off something else: an empty answer records nothing and
-  follows `default_base_branch` from `config.json`, then `develop`
-- **Pre-migrated dump** — worth it when replaying the migration history is slow.
-  → `--dump`, plus `--db-service` if it is not `db`, and `--db-user` for postgres only
-  when it is not `postgres` (mysql, mariadb and mongodb connect as root, never read it)
-- **Migration path** — the service and the commands that must run before the dump is
-  taken → `--app-service`, `--deps`, `--migrate`
-- **Where the migration files live** — only asked because the default pathspec
-  matches Django, Prisma and MikroORM and nothing else: a Rails (`db/migrate/*`) or
-  Flyway layout needs `--migrations-path`, or no commit ever touches the pathspec and
-  the dump reads as up to date forever
-- **Database wiring** — how does the app learn which database to hit? `{{database}}`
-  is replaced by the throwaway database's name → `--env KEY=VALUE`, repeatable. This
-  is the setting that most often makes a refresh useless, so read the app's own
-  configuration rather than guessing the variable name: map the very one the compose
-  service already sets (`DATABASE_URL`, `DB_NAME`, `MONGO_URL`…), password and all,
-  with only the database name replaced by `{{database}}`. Get it wrong and the
-  migrations run against the project's real database while the throwaway one stays
-  empty; since 0.4.3 the refresh fails there instead of publishing an empty dump, and
-  the fix is always this mapping
-- **Git-dir bind-mount** — only if the compose mounts the git-dir into a container
-  → `--git-container`, otherwise leave it off, it creates nothing
-- **Seed of a fresh worktree** — the command that makes a restored database usable
-  (`manage.py seed_data`, a dev-users command…), played in the application service
-  once the database answers and that service reports itself healthy → `--post-create`.
-  Ask for the seed steps only: a script that resets the database undoes the restore
-- **What the migration command needs besides the database** — only for a
-  `migrate_command` that also seeds, and whose seeding talks to object storage, a
-  cache or a search index: the refresh runs its throwaway container with `--no-deps`,
-  which is right for a plain migration and kills a seeding one (`Object storage is
-  unreachable, cannot seed file-backed data`) → `--start-dependencies` (**0.15.0**),
-  which brings up what the application service declares in `depends_on` for the time
-  of the refresh and takes it back down with it. Off by default
-- **A second database the seed writes to** — only when the same Postgres server holds
-  another database the app depends on, an identity provider's whose account ids the
-  app stores: only `{{database}}` is dumped otherwise, and a restored worktree gets
-  ids that point at nothing, so nobody logs in → `--extra-database <name>`,
-  repeatable (**1.3.0**, postgres only). Its name is fixed in the compose file, so it
-  is dumped as the refresh leaves it on the project's real server: the seed must find
-  its accounts already there without failing, and an init script of the project's
-  own that creates that database must skip it when it exists, since it runs after
-  the restore. Every wtm writing the registry must be 1.3.0 or later: an older one
-  drops the field when it saves
-- **How slowly the stack boots** — only for a project whose services install their
-  dependencies at startup and outlast the built-in bounds (a minute for the database,
-  ten for the application) → `--ready-timeout`, `--ready-interval`
-- **Local files git leaves out** — what each developer keeps untracked and a worktree
-  cannot run without, besides the `*.env` files that follow anyway (`.env.local`, an
-  IDE's local settings, a local JSON config) → `--copy <pattern>`, repeatable
-  (**0.21.0**). `git status --ignored --short` in the main checkout lists candidates
-
-### 4. Present the command, do not run it
-
-```bash
-wtm project create my-app --dir ~/dev/projects/my-app --base develop \
-  --dump --app-service backend \
-  --deps 'poetry install --no-root --with dev' \
-  --migrate 'python manage.py migrate' \
-  --env 'DB_NAME={{database}}' \
-  --post-create 'python manage.py create_dev_users'
-```
-
-Hand over the full command: the interview is done, and a command the user can read
-beats a walk they have to answer. Mention that `wtm project create my-app` alone
-would ask the same things one question at a time, which is the way out when the
-interview left something unsettled: since **0.18.0** it offers what the project
-already says (database service by its image, `POSTGRES_USER`, the one service with a
-`build:`, the framework's migration command, the database variables of the compose
-environment), flags a pathspec matching no tracked file, and writes nothing until a
-closing summary is confirmed. `--no-input` is the opposite end: a missing value becomes an
-error instead of a question, which is what keeps a scripted registration from
-hanging on a prompt nobody reads. Both are theirs to run: the walk waits on their
-answers, so never start it yourself.
-
-Explain what it writes, then wait. Once the user has run it, the follow-up is
-`wtm backup refresh my-app` (starts the database if it is down, and puts it back
-where it found it afterwards) and `wtm doctor` to confirm the stride and offset. Both
-are theirs to launch too, `refresh` being long and stack-mutating.
-
-Only pass the flags the interview actually justified. A project without a dump needs
-none of the backup flags.
+When a `wtm` command fails or a stack behaves oddly (port clash, an index pushed
+further out, a dump that never refreshes, a mount error, accounts missing after a
+restore), read `troubleshooting.md` in this skill's folder before guessing.

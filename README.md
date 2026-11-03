@@ -9,7 +9,8 @@ Mes skills [Claude Code](https://docs.claude.com/en/docs/claude-code) personnels
 | `review-pr` | Review structurée et actionnable d'une pull request GitHub |
 | `review-diff` | Méthode de review commune à `review-pr` et `ticket-to-pr`, utilisable seule sur la branche courante sans PR : dimensions, auto-réfutation, severity gate, et confirmation au runtime de chaque blocker et major. Ne modifie pas le code |
 | `review-retro` | Analyse des retours reçus sur mes propres PR : taux par taille, période et relecteur, classement de chaque remarque, puis ce que la self-review aurait dû voir, transformé en propositions pour `review-diff`, `ticket-to-pr` ou la checklist du dépôt. Lecture seule sur GitHub, n'applique rien sans accord |
-| `wtm` | Usage de [worktree-manager](https://github.com/Hy0sh/worktree-manager) : worktree git avec sa stack Docker isolée, plus les disciplines d'isolation et de preuve runtime |
+| `wtm` | Usage de [worktree-manager](https://github.com/Hy0sh/worktree-manager) : worktree git avec sa stack Docker isolée, plus les disciplines d'isolation et de preuve runtime. Le dépannage est dans `troubleshooting.md`, lu seulement quand une commande échoue |
+| `wtm-setup` | Enregistrement d'un projet dans le registre `wtm`, ou changement de ses réglages : lecture du compose, questions limitées à ce qu'il ne dit pas, puis la commande `wtm project create` ou `edit` à lancer soi-même |
 | `dailysum` | Portion personnelle du daily sum collaboratif (commits du jour, enrichissement PR/Jira) à coller dans Slack |
 | `pr-watch` | État de mes PR ouvertes en une passe (conflits, CI, fils de review non résolus, piles), puis liste d'actions ordonnée. Lecture seule |
 | `notify-pr-slack` | Annonce d'une PR sur le canal Slack du projet pour demander une review |
@@ -65,6 +66,7 @@ cp -R skills/review-pr ~/.claude/skills/
 cp -R skills/review-diff ~/.claude/skills/
 cp -R skills/review-retro ~/.claude/skills/
 cp -R skills/wtm ~/.claude/skills/
+cp -R skills/wtm-setup ~/.claude/skills/
 cp -R skills/dailysum ~/.claude/skills/
 cp -R skills/pr-watch ~/.claude/skills/
 cp -R skills/notify-pr-slack ~/.claude/skills/
@@ -99,6 +101,9 @@ claude-skills/
     │   ├── classify-prompt.md
     │   └── scripts/       # collecte des retours via gh, puis agrégation des classements
     ├── wtm/
+    │   ├── SKILL.md
+    │   └── troubleshooting.md
+    ├── wtm-setup/
     │   └── SKILL.md
     ├── dailysum/
     │   └── SKILL.md
