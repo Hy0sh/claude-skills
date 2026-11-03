@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Review a GitHub pull request and provide structured, actionable feedback
+description: Use when a GitHub pull request, given by number, has to be reviewed — a first pass, or a re-review after the author pushed fixes. Checks the PR out in its own worktree, follows review-diff, reads the CI instead of rerunning it, and drafts the inline comments in the reviewer's voice for them to post. Writes nothing to GitHub.
 argument-hint: [pr-number]
 # Write stays: the review keeps its own files in the scratchpad.
 disallowed-tools:
