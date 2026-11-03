@@ -2,6 +2,10 @@
 name: dailysum
 description: Generate the user's own portion of a collaborative daily sum (the work done today), to paste into the team's Slack Canvas. Use when the user asks for their daily, dailysum, a summary of today's work or a daily project recap, in any language ("mon daily", "résumé des travaux du jour").
 argument-hint: [YYYY-MM-DD]
+# Runs apart from the conversation: the logs and JSON it reads stay out of it, only
+# the draft comes back. In the foreground, since the user is waiting for that draft.
+context: fork
+background: false
 disallowed-tools:
   - Write
   - Edit

@@ -2,6 +2,10 @@
 name: sprint-check
 description: Cross-check the user's assigned Jira tickets against the real state of the code — merged, open and draft pull requests — to surface the statuses that are wrong, the tickets nobody has taken, and which ticket is the next logical one to pick up, with the reason. Use when the user asks for a tour of their Jira tickets, asks what to work on next, says statuses are out of date, or prepares a sprint review. Read-only: it proposes transitions, it never applies them.
 argument-hint: [PROJECT-KEY]
+# Runs apart from the conversation: the tickets and PRs it reads stay out of it, only
+# the report and its acli commands come back. In the foreground: the user waits for it.
+context: fork
+background: false
 disallowed-tools:
   - Write
   - Edit
