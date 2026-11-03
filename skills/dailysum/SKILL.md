@@ -2,6 +2,14 @@
 name: dailysum
 description: Generate the user's own portion of a collaborative daily sum (the work done today), to paste into the team's Slack Canvas. Use when the user asks for their daily, dailysum, a summary of today's work or a daily project recap, in any language ("mon daily", "résumé des travaux du jour").
 argument-hint: [YYYY-MM-DD]
+disallowed-tools:
+  - Write
+  - Edit
+  - NotebookEdit
+  - mcp__claude_ai_Slack__slack_send_message
+  - mcp__claude_ai_Slack__slack_send_message_draft
+  - mcp__claude_ai_Slack__slack_schedule_message
+  - mcp__claude_ai_Slack__slack_update_canvas
 ---
 
 This skill is **read-only**. It never writes to Git, GitHub, Jira, or Slack, and never posts anything. It only prints a draft block that the user pastes manually into the project's daily-sum Slack Canvas.

@@ -2,6 +2,10 @@
 name: review-diff
 description: Use when a diff has to be reviewed for correctness before it ships — the current branch or working tree against its base, with no pull request needed. The canonical review method (dimensions, self-refutation, severity gate, runtime confirmation of every blocker and major) that review-pr and ticket-to-pr follow. Read-only on the code.
 argument-hint: [base]
+# Write stays: runtime probes and captures go to the scratchpad.
+disallowed-tools:
+  - Edit
+  - NotebookEdit
 ---
 
 Chat with the user in their language; this skill file stays in English. Findings are written in the user's language; code, paths and identifiers stay as they are.

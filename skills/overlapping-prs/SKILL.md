@@ -2,6 +2,12 @@
 name: overlapping-prs
 description: Plan how a set of pull requests that overlap — same files, same schema migration chain, same shared code — are cut, ordered and merged so that they stop colliding with each other: shared foundation first, a merge order fixed up front with a stack that follows it, and schema migrations kept as the last commit of each PR and regenerated at merge time instead of renumbered. Use whenever several pieces of work touch the same area, whatever groups them (a feature, a batch of bug fixes, a refactor, review follow-ups), before splitting them into PRs; or when open PRs keep falling into conflict after each merge, when every merge forces a migration renumbering on the others, or when two PRs created the same helper twice.
 argument-hint: [the work items or the open PRs to plan]
+# Git mutations only: ticket-to-pr follows this skill and writes its plan in the same
+# turn, and the restriction lasts until the user's next message.
+disallowed-tools:
+  - Bash(git rebase *)
+  - Bash(git push *)
+  - Bash(gh pr merge *)
 ---
 
 Chat with the user in their language; this skill file stays in English.

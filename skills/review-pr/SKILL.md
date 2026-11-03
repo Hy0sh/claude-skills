@@ -2,6 +2,14 @@
 name: review-pr
 description: Review a GitHub pull request and provide structured, actionable feedback
 argument-hint: [pr-number]
+# Write stays: the review keeps its own files in the scratchpad.
+disallowed-tools:
+  - Edit
+  - NotebookEdit
+  - Bash(gh pr comment *)
+  - Bash(gh pr review *)
+  - Bash(gh pr merge *)
+  - Bash(gh pr edit *)
 ---
 
 This skill is **read-only end to end**. It writes nothing to GitHub: not a comment, not a reply, not a review verdict, not an approval. It produces the structured review and ready-to-post drafts, and the reviewer posts by hand — see the dedicated section for why that is deliberate and not a limitation. The only writes it may perform are local and to its own workspace: the worktree and stack it sets up to observe behaviour, and the scratchpad files it writes for itself.
