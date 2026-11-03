@@ -1,6 +1,19 @@
 ---
 name: jira-read
 description: Use when a task needs to read Jira — find which ticket the current branch, commits or PR are about, read a ticket in full with its comments, sub-tasks and links, or search tickets with JQL. The canonical read route (acli first with explicit fields, ADF flattened, Atlassian MCP as fallback) that other skills follow. Read-only.
+# Jira writes only: a caller loading this skill (ticket-to-pr, demo-pr) still writes
+# files in the same turn, and the restriction lasts until the user's next message.
+disallowed-tools:
+  - Bash(acli jira workitem transition *)
+  - Bash(acli jira workitem assign *)
+  - Bash(acli jira workitem comment *)
+  - Bash(acli jira workitem create *)
+  - Bash(acli jira workitem edit *)
+  - mcp__claude_ai_Atlassian__createJiraIssue
+  - mcp__claude_ai_Atlassian__editJiraIssue
+  - mcp__claude_ai_Atlassian__transitionJiraIssue
+  - mcp__claude_ai_Atlassian__addCommentToJiraIssue
+  - mcp__claude_ai_Atlassian__addWorklogToJiraIssue
 ---
 
 Chat with the user in their language; this skill file stays in English.

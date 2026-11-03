@@ -2,6 +2,22 @@
 name: sprint-check
 description: Cross-check the user's assigned Jira tickets against the real state of the code — merged, open and draft pull requests — to surface the statuses that are wrong, the tickets nobody has taken, and which ticket is the next logical one to pick up, with the reason. Use when the user asks for a tour of their Jira tickets, asks what to work on next, says statuses are out of date, or prepares a sprint review. Read-only: it proposes transitions, it never applies them.
 argument-hint: [PROJECT-KEY]
+disallowed-tools:
+  - Write
+  - Edit
+  - NotebookEdit
+  - Bash(acli jira workitem transition *)
+  - Bash(acli jira workitem assign *)
+  - Bash(acli jira workitem comment *)
+  - Bash(acli jira workitem create *)
+  - Bash(acli jira workitem edit *)
+  - Bash(git worktree add *)
+  - Bash(wtm create *)
+  - mcp__claude_ai_Atlassian__createJiraIssue
+  - mcp__claude_ai_Atlassian__editJiraIssue
+  - mcp__claude_ai_Atlassian__transitionJiraIssue
+  - mcp__claude_ai_Atlassian__addCommentToJiraIssue
+  - mcp__claude_ai_Atlassian__addWorklogToJiraIssue
 ---
 
 Chat with the user in their language, the labels and table headers below included; this skill file stays in English.
