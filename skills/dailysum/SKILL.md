@@ -62,7 +62,7 @@ Steps 1 to 4 were run from the current repo when this skill loaded; their output
 
    Match PRs to the day's commits by `headRefName` (the branch the commits live on). Use the PR title for the clean wording; use its `state` for the work state (see below).
 
-5. **Jira keys** — match `\b[A-Z][A-Z0-9]+-\d+\b` (any Jira key: a client often has two projects, `ABC` and `ABCTMA`, and a pattern built on one prefix silently misses every key of the other) in commit messages, PR titles and branch names. A work item's key is what opens its bullet, so this step is not optional enrichment. Extract, dedupe, then fetch each via the Atlassian MCP tool `getJiraIssue` (load it through ToolSearch: `select:mcp__claude_ai_Atlassian__getJiraIssue`) to phrase the `<KEY> Start of ...` items. If the MCP tool is unavailable, keep the key anyway and phrase from the PR title.
+5. **Jira keys** — match `\b[A-Z][A-Z0-9]+-\d+\b` (any Jira key: a client often has two projects, `ABC` and `ABCTMA`, and a pattern built on one prefix silently misses every key of the other) in commit messages, PR titles and branch names. A work item's key is what opens its bullet, so this step is not optional enrichment. Extract, dedupe, then read each one's summary through the route of the `jira-read` skill (§2: acli first, the Atlassian MCP as fallback; §3 for the `view` command) to phrase the `<KEY> Start of ...` items. If neither route answers, keep the key anyway and phrase from the PR title.
 
 6. **PRs you reviewed today** (a count, not a list). Get your GitHub login, then count the distinct PRs on which you submitted at least one review today:
    ```bash
