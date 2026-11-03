@@ -26,12 +26,11 @@ Rebasing a stack is destructive on the wrong guess: a force-push on the wrong br
 
 ## 1. Collect
 
-Default to the repository of the current directory; `$ARGUMENTS` overrides it. Everything below is read-only.
+Default to the repository of the current directory; `$ARGUMENTS` overrides it. Everything below is read-only. The open PRs, fetched when this skill loaded:
 
-```bash
-gh pr list --author @me --state open --limit 50 \
-  --json number,title,headRefName,baseRefName,mergeable,mergeStateStatus,isDraft,reviewDecision,updatedAt,url
-```
+!`r="$ARGUMENTS"; gh pr list --author @me --state open --limit 50 ${r:+--repo "$r"} --json number,title,headRefName,baseRefName,mergeable,mergeStateStatus,isDraft,reviewDecision,updatedAt,url || true`
+
+Empty or an error above: run that `gh pr list` yourself and report what it says.
 
 **`mergeable` lies on first read.** GitHub computes the merge state lazily: a PR that has not been visited recently comes back `UNKNOWN`, not `CONFLICTING` or `MERGEABLE`. Never report `UNKNOWN` as "no conflict". Re-query the PRs that came back `UNKNOWN` once after a few seconds; if they are still unknown, say so explicitly rather than guessing.
 
