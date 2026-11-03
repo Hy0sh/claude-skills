@@ -40,10 +40,11 @@ The epic and the last-updated date come from one `view` per ticket (`jira-read` 
 
 ## 2. Real state, from the code
 
-```bash
-gh pr list --author @me --state all --limit 100 \
-  --json number,title,state,headRefName,baseRefName,isDraft,mergedAt,url
-```
+Fetched when this skill loaded:
+
+!`gh pr list --author @me --state all --limit 100 --json number,title,state,headRefName,baseRefName,isDraft,mergedAt,url || true`
+
+Empty or an error above: run that `gh pr list` yourself.
 
 Extract the Jira keys from each PR title, body and branch name with the pattern of `jira-read` §1. A PR can carry several keys; a ticket can have several PRs. Build the mapping both ways before concluding anything.
 

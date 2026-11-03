@@ -36,35 +36,27 @@ Use the date passed as `$ARGUMENTS` if present (format `YYYY-MM-DD`), otherwise 
 
 A PR merged today whose real work predates today must **not** appear. A work item started today with no PR yet **must** appear. So drive off commits, then enrich with PR titles and Jira labels.
 
-Run these from the current repo. The `.git` is shared across worktrees, so `--all` captures every worktree's branches.
+Steps 1 to 4 were run from the current repo when this skill loaded; their output is below each step. The `.git` is shared across worktrees, so `--all` captures every worktree's branches. A step whose output is empty or an error: run its command yourself.
 
-1. **Author identity — both of them.** A GitHub squash-merge rewrites the resulting commit's author on the base branch to the GitHub account's noreply email, even though the original commits on the feature branch carry your local git email. Missing either identity silently drops same-day PRs that got squash-merged. Resolve both:
-   ```bash
-   git config user.email; git config user.name
-   gh api user --jq '(.id|tostring) + "+" + .login + "@users.noreply.github.com"'
-   ```
+1. **Author identity — both of them.** A GitHub squash-merge rewrites the resulting commit's author on the base branch to the GitHub account's noreply email, even though the original commits on the feature branch carry your local git email. Missing either identity silently drops same-day PRs that got squash-merged. Both, plus the day:
 
-2. **Commits authored today, across all branches/worktrees, under either identity** (subject + body, with ref decoration):
-   ```bash
-   git log --all --author="$(git config user.email)" --author="$GH_NOREPLY_EMAIL" \
-     --since="$(date +%F) 00:00:00" --until="$(date +%F) 23:59:59" \
-     --pretty=format:'%h%x09%D%x09%s%n%b' --date=local
-   ```
-   (`$GH_NOREPLY_EMAIL` = the email resolved in step 1; multiple `--author` flags OR together. Replace `$(date +%F)` with the target date when `$ARGUMENTS` is set.)
+   !`d="$ARGUMENTS"; [ -n "$d" ] || d=$(date +%F); echo "day: $d"; echo "email: $(git config user.email)"; echo "name: $(git config user.name)"; echo "noreply: $(gh api user --jq '(.id|tostring) + "+" + .login + "@users.noreply.github.com"' 2>/dev/null)"`
+
+2. **Commits authored that day, across all branches/worktrees, under either identity** (subject + body, with ref decoration; multiple `--author` flags OR together):
+
+   !`d="$ARGUMENTS"; [ -n "$d" ] || d=$(date +%F); nr=$(gh api user --jq '(.id|tostring) + "+" + .login + "@users.noreply.github.com"' 2>/dev/null); git log --all --author="$(git config user.email)" ${nr:+--author="$nr"} --since="$d 00:00:00" --until="$d 23:59:59" --pretty=format:'%h%x09%D%x09%s%n%b' --date=local 2>/dev/null || true`
 
    The `--all` walk also surfaces `refs/stash` entries (commit subjects starting with `index on <branch>: ...` or `WIP on <branch>: ...`) — these are stash artifacts, not real work; drop them before synthesizing bullets.
 
 3. **Active worktree branches** (to catch WIP work items that have no PR — e.g. a freshly started ticket):
-   ```bash
-   git worktree list
-   ```
+
+   !`git worktree list 2>/dev/null || true`
 
 4. **PRs with activity, for clean titles + state:**
-   ```bash
-   gh pr list --author "@me" --state all \
-     --json number,title,state,headRefName,createdAt,mergedAt,updatedAt --limit 50
-   ```
-   Match PRs to today's commits by `headRefName` (the branch the commits live on). Use the PR title for the clean wording; use its `state` for the work state (see below).
+
+   !`gh pr list --author "@me" --state all --json number,title,state,headRefName,createdAt,mergedAt,updatedAt --limit 50 || true`
+
+   Match PRs to the day's commits by `headRefName` (the branch the commits live on). Use the PR title for the clean wording; use its `state` for the work state (see below).
 
 5. **Jira keys** — match `\b[A-Z][A-Z0-9]+-\d+\b` (any Jira key: a client often has two projects, `ABC` and `ABCTMA`, and a pattern built on one prefix silently misses every key of the other) in commit messages, PR titles and branch names. A work item's key is what opens its bullet, so this step is not optional enrichment. Extract, dedupe, then fetch each via the Atlassian MCP tool `getJiraIssue` (load it through ToolSearch: `select:mcp__claude_ai_Atlassian__getJiraIssue`) to phrase the `<KEY> Start of ...` items. If the MCP tool is unavailable, keep the key anyway and phrase from the PR title.
 

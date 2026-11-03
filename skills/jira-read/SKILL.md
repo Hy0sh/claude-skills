@@ -22,13 +22,18 @@ This skill reads Jira and nothing else: no transition, no assignment, no comment
 
 ## 1. Resolve the key
 
-Probe **all** sources in one pass, then decide. They are local and free; stopping at the first hit only means coming back to the others when it turns out to be the wrong ticket.
+Probe **all** sources in one pass, then decide. They are local and free; stopping at the first hit only means coming back to the others when it turns out to be the wrong ticket. They were read when this skill loaded, from the session's directory:
 
-```bash
-git branch --show-current
-git log --oneline -20
-gh pr view --json title,body --jq '.title, .body' 2>/dev/null
-```
+- Branch: !`git branch --show-current 2>/dev/null || true`
+- Commits:
+
+!`git log --oneline -20 2>/dev/null || true`
+
+- PR title and body:
+
+!`gh pr view --json title,body --jq '.title, .body' 2>/dev/null || true`
+
+Work moved to another worktree since the session started? Run the same three commands there.
 
 Match keys with `\b[A-Z][A-Z0-9]+-\d+\b`, never with one project's prefix: a client often has two projects (`ABC` and `ABCTMA`), and a pattern built on one silently misses every key of the other.
 
