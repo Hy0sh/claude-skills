@@ -168,7 +168,7 @@ Note the allocated ports the adoption prints: they are **not** the main stack's,
 
 `--as` renames the branch on the way in, and adoption is the only moment it can be done: the branch is part of the compose project name, so a rename after the stack exists orphans it. Creating the branch under its final name makes `--as` unnecessary — never rename afterwards.
 
-Project not registered in `wtm`: a plain worktree without a stack, and tell the user that `/wtm setup` would give it one.
+Project not registered in `wtm`: a plain worktree without a stack, and tell the user that `/wtm-setup` would give it one.
 
 Only now, the ticket moves: the in-progress status by its exact name (`jira-read` §5), then the assignment.
 
