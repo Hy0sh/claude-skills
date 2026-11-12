@@ -54,7 +54,14 @@ Leave a section out when the plan has nothing for it. Every fact on the page com
 
 ## Choices are clickable
 
-A tool that shows the page next to its own answer form (acw's board does) takes a click on an option as the answer. Each option carries the choice's number, in the markdown's order from 1, and its letter:
+A tool that shows the page next to its own answer form (acw's board does) takes a click on an option as the answer. Each option carries the choice's number, in the markdown's order from 1, and its letter. acw's board refuses at park time a document whose choices it cannot read, so the markdown and the page follow one contract:
+
+- A decision is **one list item** of the markdown, its options written `(a) …; (b) …` and its recommendation `Reco: (a)`, letters a to z. Never numbered options (`1.`, `Option 2`) nor a numbered Reco (`Reco : option 2`).
+- `data-option` carries those same **letters**, never digits.
+- Never quote or describe the format inside a list item: put it in a paragraph or a code block, or the item is read as a decision of its own.
+- The page has exactly as many `data-choice` numbers as the markdown has decision items.
+
+An example element:
 
 ```html
 <div class="opt" data-choice="1" data-option="a">…</div>
