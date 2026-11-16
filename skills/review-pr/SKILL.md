@@ -105,7 +105,8 @@ Once you are confirmed on the PR head, review it by following the `review-diff` 
 - **The diff**: `git diff origin/<baseRefName>...HEAD`, or the narrowed range of a re-review.
 - **The checkout**: the PR worktree from the setup step.
 - **The stack**: on route A, the one `wtm create` started — `wtm exec <headRefName> -- …` on the ports it printed. Clean up your footprint when the review is done.
-- **The expected behaviour**: the PR title and body, and the ticket they name.
+- **The expected behaviour**: the ticket the PR names, read with `jira-read`, then the PR title and body.
+- **The business source of truth**: the one the project notes name. When the ticket cannot be read (access refused, not found), it replaces the ticket, for the conformance step and for the runtime pass on the criteria: grep it for the ticket key and the feature's words. Say in the overview which source the review was checked against.
 - **The mergeability verdict**: the CI, read as below.
 
 **Do not re-run the project's checks — the GitHub CI already did.** The CI ran all of them on the PR head; `gh pr checks` (prefetched above) is the authoritative result, and replaying them locally burns minutes and produces failures caused by the local setup rather than by the PR — noise that has to be untangled before it can be discarded.
