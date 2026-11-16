@@ -19,7 +19,8 @@ This skill reviews a diff and produces findings. It edits no file and writes not
 | The diff to review | the working tree against the base: `git diff origin/<base>`, plus every untracked file (`git status --porcelain`) read whole — new files are not in `git diff` |
 | The checkout every file is read from | the current directory |
 | The stack to observe on | the current worktree's, through `wtm exec <branch> -- …` (see the `wtm` skill); none → say so |
-| The expected behaviour | the PR body, or the ticket and the edge cases settled for it |
+| The expected behaviour | the ticket and the edge cases settled for it, then the PR body |
+| The business source of truth | the one the project notes name (business rules, decisions log), when there is one; none → say so |
 | The mergeability verdict | not this skill's job: the caller has it (the CI on a PR, the local gates in `ticket-to-pr`) |
 | The review checklist | `~/.config/hy0sh-skills/repos/<owner>/<repo>/review.md` when it exists (`<owner>/<repo>` from `gh repo view --json nameWithOwner`); none → skip it |
 
@@ -35,11 +36,24 @@ Proceed dimension by dimension, covering only the ones the diff actually touches
 
 *Performance* is reviewed whenever the diff adds a loop, a serializer field or a helper called per row: a query inside a loop, a related object read without `select_related`/`prefetch_related` (or the stack's equivalent), a filter left unbounded (no date, no tenant), the same computation repeated per item. Count what a request costs at 1 and at N rows from the code; a count that grows with N is at least a major when the path serves a list or a batch.
 
+*Frontend* covers every effect or subscription the diff adds that sends a request, starts a mutation or writes state: list its dependencies and check each one is stable across renders. A function a custom hook returns without memoisation, or an object built during render, changes on every render and re-fires the effect; when the effect itself causes a render (a mutation, a state write), it loops. Trace one render cycle by hand before calling it safe.
+
+*Tests*: an assertion on a call count inside a polling wait (`waitFor`, `eventually`) passes the first time the count is reached, so it never proves "only once". A test meant to prove a single call has to let time pass before counting.
+
 Whatever the dimensions, ask of every new path the diff adds **who triggers it today**: a screen and its action, an endpoint and the front component that calls it, a scheduled task, an import, traced in the code of the reviewed branch. A path nothing reachable triggers (a back-end use case no screen calls, a state no user action produces) is reported once, at the top of the output, as `Unreachable today: <path> — <why>`. It is information, not a defect: never a blocker or a major on that ground alone, and the effort the diff spends on it (performance, edge cases) is weighed against it.
 
 Then look **outside the diff**, where reviewers find what the author missed. For every rule, filter, scope, permission or computation the diff adds or changes, find its **twins**: the other places that implement the same thing (the back-end check of a front-end rule and the reverse, the serializer and the export, the screen and the bulk action, the view permission and the condition that shows its button, the route guard and the menu entry, the component and the hook). Grep for them on the reviewed branch and compare: two implementations that disagree on one input are a defect, whichever one the diff touched. Then its **neighbours**: the sibling endpoints of the same list or module, which must apply the same scope and filter as the one the diff changed. A twin or a neighbour left unchanged when it should have followed is reported against the diff.
 
 Two kinds of twins are easy to miss. **Other writers**: for every persistent field the diff writes, list the other paths that write the same record, in the diff or not — a `save()` without a field list (`update_fields` or the equivalent), the other actor's form or serializer, an import. A path that rewrites the whole record and overwrites the field the diff adds is a defect reported against the diff. **Mirrored validation**: when the diff adds a server-side validation (required field, maximum length, format), check that the client form's schema repeats it, and the reverse.
+
+## Business conformance — every review, never skipped
+
+Every user-visible text, value, limit, count or duration the diff adds or changes (translation files, constants, validation bounds, e-mail templates) is checked twice:
+
+- **Against the business source of truth.** Grep it for the ticket key and for the feature's words, read the rules that apply, and cite them by id. A later update under a rule supersedes its body. A value that contradicts an active rule with no decision recorded against it is a finding: when users see it today, it goes through the severity gate like any wrong behaviour (it is deterministic); when the author announced the gap in the PR, it is a suggestion that asks for the decision, written on the PR, not left in the report. The PR body says what the author built, never what was decided: it is not a source for this check.
+- **Against its twin.** For every error code, refusal or status the diff turns into a user-visible text, grep the other clients of the same back end (another app, a mobile and a web front) for the text they show for that same code. Two different texts for one case are a defect unless a recorded decision says why.
+
+The review states which source it checked against. With no business source and no readable ticket, it says so in its first line.
 
 When a review checklist was found, walk each of its items against the diff and report the ones that apply and fail like any other finding; an item the diff does not touch is skipped silently.
 
@@ -66,6 +80,14 @@ Isolation is the hard limit, not the effort. **Never** touch the shared stack, a
 **State the evidence level of each blocker/major**, in one clause: "confirmed at runtime (screenshot)" vs "confirmed by test X, green in CI" vs "confirmed by a probe". Never present a static trace as if it were observed. **A finding that runtime did not confirm is not a blocker or a major**: when the run refutes it, it goes away. When the run is genuinely out of reach (no stack for this project, an environment you cannot reproduce — tried and blocked, not merely expensive), it goes under its own heading, *Not confirmed — runtime out of reach*, with the severity the trace gives it and what blocked the observation. It counts in neither the blockers and majors nor the suggestions.
 
 Suggestions and positives need no run: they cost the author nothing to dismiss.
+
+## Runtime pass on the acceptance criteria
+
+On top of the confirmation above, the review plays the acceptance criteria in the isolated stack when **both** hold: the diff changes a behaviour a user sees (a screen, a message, an e-mail), **and** criteria are available — the ticket's, or, when the ticket cannot be read, the verifiable criteria of the business rules the source of truth ties to it. A diff with no visible behaviour, or with no criteria from either source, gets no stack beyond the confirmation of a blocker or major.
+
+Use the project's own skill for this when it has one (a ticket-verification skill), else drive the screen as the confirmation step does. Play each testable criterion once; a criterion that fails is a finding with its evidence level "confirmed at runtime". Write in the report which criteria were played, which could not be, and how long the pass took (stack start, then criteria).
+
+No free stack is not "runtime out of reach" and is no reason to wait: deliver the static review at once, its first line saying "criteria not played: no free stack", and let the caller schedule the pass for later.
 
 ## Severity gate — reproducibility and probability, not just plausibility
 
