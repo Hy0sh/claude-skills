@@ -48,6 +48,8 @@ Show `git -C ~/notes diff --stat` and the diff, commit only after the user's go:
 
 Create `~/notes/projets/<x>/index.md` (frontmatter `type: index`, `projet`, `repos: [<repo dir name>]`, `maj`; Studio path if any; sections `## Métier`, `## Technique`), then `ln -s ~/notes/projets/<x>/index.md "<main repo>/CLAUDE.local.md"`, and check `git -C "<main repo>" check-ignore -q CLAUDE.local.md`; if not ignored, append `CLAUDE.local.md` to `<git-common-dir>/info/exclude`. Never an `@import` in `CLAUDE.local.md`: an import outside the project needs a per-folder approval and is silently skipped in new worktrees.
 
+Then give the project its colour in Obsidian's graph: in `~/notes/.obsidian/graph.json`, append to `colorGroups` `{"query": "path:projets/<x>", "color": {"a": 1, "rgb": <int>}}`, with an `rgb` (0xRRGGBB as an integer) far from the colours already used. Skip it if a group with that query exists. Obsidian rewrites this file from memory: tell the user to reload with « Recharger l'application sans enregistrer » (Cmd+P), or the group is lost.
+
 ## Never
 
 - Write to the Studio, or into a client repo beyond the `CLAUDE.local.md` symlink and its line in `.git/info/exclude`.
