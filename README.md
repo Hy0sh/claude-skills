@@ -32,7 +32,7 @@ main :
 
 | Fichier | Écrit par | Contenu |
 |---|---|---|
-| `slack.json` | `notify-pr-slack` | le canal de review : `channel_id`, `name`, `connect` pour un canal Slack Connect |
+| `slack.json` | `notify-pr-slack` | le canal de review : `channel_id`, `name` |
 | `acceptance.md` | `ticket-to-pr` | `skill: <nom>`, ou le descriptif de la recette runtime |
 | `commits.md` | `ticket-to-pr` | `skill: <nom>`, ou la convention de commits et de PR |
 | `demo/recipe.md` | `demo-pr` | la recette de démo : comptes, réglages et workers à activer, libellés du menu, composants maison, pièges, remise à zéro |
