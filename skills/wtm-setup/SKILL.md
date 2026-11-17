@@ -114,6 +114,18 @@ Two things to read in that output rather than discover later:
   cannot run without, besides the `*.env` files that follow anyway (`.env.local`, an
   IDE's local settings, a local JSON config) → `--copy <pattern>`, repeatable
   (**0.21.0**). `git status --ignored --short` in the main checkout lists candidates
+- **Host scripts that reach a service** — a script run on the host (`pnpm`, `make`, a
+  seed or user-creation script) that finds a service through a variable or a port it
+  reads itself. Only a port written `${VAR:-default}` in compose gets its variable
+  exported; a literal one (`"4434:4434"`) gets nothing, and a project with its own
+  `compose.override.yaml` keeps the rebased ports in `.wtm-ports.yaml` only. The script
+  then falls back to the main stack's port: it fails when that stack is down, and
+  writes into it when it is up → `--run-env KEY=VALUE`, repeatable, replaces the set
+  (**1.6.0**), with `{{port:<service>:<container port>}}` resolved on the worktree's
+  ports. Name the variables the script already reads, so nothing changes in the
+  project: `--run-env 'DATABASE_URL=postgresql://app:app@localhost:{{port:db:5432}}/app'`.
+  Only `wtm run`, `create --run` and `wtm env` set them, they never reach a container
+  or a bare command, and a template a branch cannot resolve stops the command
 
 ### 4. Present the command, do not run it
 
