@@ -293,6 +293,15 @@ cd $(wtm path feat/my-branch)
 eval "$(wtm env feat/my-branch)"
 ```
 
+A host command that reaches a service of the stack (a script hitting the database or
+an API) goes through `wtm run`, or a shell that ran `eval "$(wtm env)"`: typed bare,
+it targets the default ports, so the **main** stack, silently, when that one is up.
+`wtm run` sets the port variables of ports written `${VAR:-default}`, plus the
+project's `run_env` (**1.6.0**), whose `{{port:<service>:<port>}}` templates resolve on
+this worktree. A script still aiming at the main stack through `wtm run` means a
+literal port with no `run_env` for it: say so and point at `wtm-setup`, rather than
+passing the URL by hand each time.
+
 Typed from inside a worktree, `ports`, `path`, `env`, `exec` and `run` take its branch
 when none is named (**0.21.0**): `wtm run -- docker compose ps`. From the main checkout
 or a detached HEAD they refuse and ask for one.
