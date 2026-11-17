@@ -18,8 +18,9 @@ description: Use when the user asks to update their Obsidian vault or memory —
 
 From the session (and what the user just dictated), list candidates. Keep only what will still be true and useful in a month: a rule, a decision, a trap, a preference, a command. Drop session state, what git/Jira/the code already says, and anything unverified (or mark it `non vérifié`).
 
-For each candidate, one line:
-`[créer|modifier] <path> — <the fact in one sentence>`
+Write the candidates to a markdown file outside any repo (e.g. `~/.claude/plans/vault/<date>-maj-vault.md`), grouped under one heading per destination (project notes, common notes), one list item per candidate:
+`[créer|modifier] <path> (<type>) : <the fact in one sentence>`
+The divergences of step 3 go in the same file. Then render it with the `hy0sh-skills:visual-plan` skill (page next to the markdown, same name, `.html`): the user reads the page, not a list in the chat.
 - Destination: `commun/` if it holds on any project (dev preferences, ways of working, generic traps), `projets/<x>/notes/` otherwise (the index sorts them by theme). A project name or client fact never goes in `commun/`.
 - Prefer modifying an existing note over creating one: `grep -ril` the vault first.
 
@@ -37,7 +38,7 @@ Never decide which is right. Duplicating the source is fine; contradicting it si
 
 ## 4. Ask, then write
 
-Ask with AskUserQuestion (keep / change / drop per candidate, and a side for each divergence). Then write with the `obsidian:obsidian-markdown` format:
+Put the decision in the same file under `## Choix à valider`, as `(a) …; (b) …` list items, each with a `Reco: (a)`: keep all / some / none of the candidates, and a side per divergence. Re-render the page, so a board that shows it can take the answer. Outside such a board, ask with AskUserQuestion (keep / change / drop per candidate, and a side for each divergence). Then write with the `obsidian:obsidian-markdown` format:
 - frontmatter `type` (regle | decision | piege | preference | reference), `projet` (`commun` or `<x>`), `maj` (today, YYYY-MM-DD);
 - one subject per note, short; link it from its index with `[[...]]` and a one-line hook.
 - An index stays at ~60 lines max: past that, group lines into a sub-note and link it instead.
