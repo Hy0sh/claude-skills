@@ -136,12 +136,14 @@ details pre { font-family: var(--font-mono); font-size: 12.5px; overflow-x: auto
 </div>
 <script>
 // Copies the command next to the button; falls back to selecting it when the clipboard is refused.
+// Inside a board's sandboxed iframe the clipboard is blocked, so the board copies on our behalf.
 document.addEventListener("click", async e => {
   const b = e.target.closest(".copy");
   if (!b) return;
   const code = b.parentElement.querySelector("code");
   try {
-    await navigator.clipboard.writeText(code.textContent);
+    if (window.parent !== window) parent.postMessage({type: "copy", text: code.textContent}, "*");
+    else await navigator.clipboard.writeText(code.textContent);
     b.textContent = "Copié";
     b.classList.add("done");
     setTimeout(() => { b.textContent = "Copier"; b.classList.remove("done"); }, 1500);

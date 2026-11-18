@@ -13,6 +13,9 @@
 #   ts_totp_cmd <branch> <login>
 #       prints the repo's own command that prints a current code, for accounts
 #       declared with `repo` as their secret.
+#   ts_foreign_worktree <path>
+#       true when the worktree holding the branch is not the human's (default: an
+#       agent's, under /.claude/worktrees/); ts_up then stops instead of reusing it.
 set -euo pipefail
 
 TS_SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
@@ -21,6 +24,8 @@ TS_TIMEOUT_SECONDS="${TS_TIMEOUT_SECONDS:-600}"
 TS_ACCOUNTS=()
 TS_ONCE=" "
 TS_BRANCH=""
+TS_BASE=""
+TS_URL=""
 TS_START=$SECONDS
 
 # RFC 6238, SHA-1, 30 s, 6 digits; python3 stdlib only. Optional 2nd arg: unix time.
@@ -56,46 +61,63 @@ ts_url() {
     END { if (!found && p) print (p ~ /^https?:/ ? p : "http://" p) }'
 }
 
+ts_foreign_worktree() {
+  case "$1" in */.claude/worktrees/*) return 0 ;; esac
+  return 1
+}
+
+# Prints 200 when TS_URL answers 200 and ts_ready passes, else the HTTP code or "unready".
+ts_probe() {
+  local code
+  code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$TS_URL" || true)"
+  # A page can answer 200 while the dev server still fails on other modules.
+  if [ "$code" = 200 ] && declare -F ts_ready >/dev/null && ! ts_ready "$TS_BRANCH" "$TS_BASE" >/dev/null 2>&1; then
+    code=unready
+  fi
+  echo "$code"
+}
+
 # ts_up <branch> <profile|-> <service> <path>: create or restart the stack, then wait
 # until <service><path> answers 200 and ts_ready passes, calling ts_on_stall meanwhile.
 ts_up() {
   local branch="$1" profile="$2" service="$3" path="$4"
-  local args=()
+  local args=() held
   TS_BRANCH="$branch"
   TS_START=$SECONDS
   [ "$profile" != "-" ] && args=(--profile "$profile")
   # A service late on its first start makes create fail; the wait below recovers it.
   # ${a[@]+...}: an empty array is "unbound" under set -u in macOS's bash 3.2.
-  if wtm path "$branch" >/dev/null 2>&1; then
+  if held="$(wtm path "$branch" 2>/dev/null)"; then
+    # git lets a branch live in one worktree only: an agent's stack can stop under us.
+    if [ -z "${TS_ALLOW_FOREIGN:-}" ] && ts_foreign_worktree "$held"; then
+      echo "branch $branch is held by $held; rerun once it is free" >&2
+      return 1
+    fi
     wtm start "$branch" ${args[@]+"${args[@]}"} || true
   else
     wtm create "$branch" ${args[@]+"${args[@]}"} || true
   fi
 
-  local base url code="000"
-  base="$(ts_url "$branch" "$service")"
-  if [ -z "$base" ]; then
+  local code="000"
+  TS_BASE="$(ts_url "$branch" "$service")"
+  if [ -z "$TS_BASE" ]; then
     echo "No address for service '$service' in \`wtm ports $branch\`." >&2
     return 1
   fi
-  url="$base$path"
-  printf 'Waiting for %s ' "$url"
+  TS_URL="$TS_BASE$path"
+  printf 'Waiting for %s ' "$TS_URL"
   while [ $((SECONDS - TS_START)) -lt "$TS_TIMEOUT_SECONDS" ]; do
-    code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$url" || true)"
-    if [ "$code" = "200" ]; then
-      # A page can answer 200 while the dev server still fails on other modules.
-      if ! declare -F ts_ready >/dev/null || ts_ready "$branch" "$base" >/dev/null 2>&1; then
-        echo " ready"
-        return 0
-      fi
-      code="unready"
+    code="$(ts_probe)"
+    if [ "$code" = 200 ]; then
+      echo " ready"
+      return 0
     fi
     ts_stall "$code"
     printf '.'
     sleep "$TS_POLL_SECONDS"
   done
   echo
-  echo "The stack did not get ready on $url in $((TS_TIMEOUT_SECONDS / 60)) min (last: $code)." >&2
+  echo "The stack did not get ready on $TS_URL in $((TS_TIMEOUT_SECONDS / 60)) min (last: $code)." >&2
   echo "Send this output to whoever prepared the sheet; \`wtm remove $branch\` cleans up." >&2
   return 1
 }
@@ -140,7 +162,15 @@ ts_code() {
 }
 
 ts_summary() {
-  local branch="$1" line login password secret
+  local branch="$1" line login password secret code
+  # The stack can stop during the data commands; never print a dead address.
+  if [ -n "$TS_URL" ]; then
+    code="$(ts_probe)"
+    if [ "$code" != 200 ]; then
+      echo "The stack stopped answering on $TS_URL (last: $code); rerun the script." >&2
+      return 1
+    fi
+  fi
   echo
   echo "================ Ready to test ================"
   for line in ${TS_ACCOUNTS[@]+"${TS_ACCOUNTS[@]}"}; do
@@ -188,7 +218,7 @@ ts_selftest() {
 #!/usr/bin/env bash
 d="$(dirname "$0")"; echo "$*" >>"$d/wtm.log"
 case "$1" in
-  path) exit 1 ;;
+  path) [ -n "${WTM_PATH:-}" ] && echo "$WTM_PATH" || exit 1 ;;
   create) exit 1 ;;
   ports) printf 'urls, through traefik\n  web/url  http://web.x.localhost:1\n\nports\n  db  localhost:2\n' ;;
   exec) n=$(cat "$d/e" 2>/dev/null || echo 0); echo $((n + 1)) >"$d/e"; [ "$n" -ge 1 ] ;;
@@ -234,6 +264,14 @@ EOF
   grep -q '^When done: wtm remove feature/ABC-1-x$' <<<"$out" || { echo "FAIL cleanup line"; fail=1; }
   [ "$(PATH="$dir:$PATH" bash "$dir/test-setup.sh" totp a@example.test)" = "$(ts_totp GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ)" ] || { echo "FAIL totp subcommand"; fail=1; }
   [ "$(PATH="$dir:$PATH" bash "$dir/test-setup.sh" expire)" = "expired" ] || { echo "FAIL extra subcommand"; fail=1; }
+
+  # The branch held by an agent's worktree: stop, never start or reuse its stack.
+  : >"$dir/wtm.log"
+  if out="$(PATH="$dir:$PATH" WTM_PATH=/x/repo/.claude/worktrees/agent-1 TS_POLL_SECONDS=0 TS_NO_OPEN=1 bash "$dir/test-setup.sh" 2>&1)"; then
+    echo "FAIL foreign worktree should stop"; fail=1
+  fi
+  [ "$out" = "branch feature/ABC-1-x is held by /x/repo/.claude/worktrees/agent-1; rerun once it is free" ] || { echo "FAIL foreign line: $out"; fail=1; }
+  grep -qE '^(start|create) ' "$dir/wtm.log" && { echo "FAIL foreign stack touched"; fail=1; }
   rm -rf "$dir"
   [ "$fail" = 0 ] && echo "selftest ok"
   return "$fail"
