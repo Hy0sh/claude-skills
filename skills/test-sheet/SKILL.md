@@ -19,6 +19,8 @@ Shipped with this skill, never rewritten by hand:
 
 Clean tree and HEAD at the reviewed commit the brief names. Otherwise stop and say what you saw: a sheet for another commit tests something nobody reviewed.
 
+Stacked branches: when this branch contains another branch still waiting for its own test (its PR's base is that branch, or `git branch --merged HEAD` lists it), say so to the caller and offer one combined sheet on the top branch, covering both changes. Two sheets on the same code make the human test it twice.
+
 ## 2. Read what the change must do
 
 - the ticket's acceptance criteria (`jira-read` skill), its comments included;
@@ -72,6 +74,7 @@ cat <this skill>/test-sheet-lib.sh ~/.config/hy0sh-skills/repos/<owner>/<repo>/t
 The body is this shape, the branch written in full on every line:
 
 ```bash
+ts_commit 1a2b3c4
 ts_account admin@example.test 'Admin-Test-2026!' repo
 
 setup() {
@@ -92,10 +95,11 @@ case "${1:-}" in
 esac
 ```
 
+- `ts_commit <sha>`, first: the reviewed commit the sheet covers, the one named at the top of the page. When the branch has moved since (a base merge, a fix commit), the final block opens with a warning: the sheet may be stale.
 - `ts_up <branch> <profile> <service> <path>`: the profile the change needs (`-` for the whole stack), the service as `wtm ports` names it, and a path that answers **200 without a session** (the login page, a health route): a protected screen answers 302 or 401 and the wait never ends.
 - `ts_retry <tries> <seconds> <command…>` for the first data commands: a service can still be installing when the screen already answers. Between two tries the repo's recoveries run (`ts_on_stall … retry`).
 - Every data command can run twice: it checks first, or tolerates "already exists". The human may rerun the script.
-- An account the app asks a second factor of gets its code one of two ways, as its third argument: a base32 secret **the script imposes** (an admin API or a seed command that takes it; one per account, from `python3 -c 'import base64,os;print(base64.b32encode(os.urandom(20)).decode())'`), or `repo` when the stack generates the secret itself, which the repo's `ts_totp_cmd` reads back. Never a secret the proof's run enrolled: the human's run enrols another one.
+- An account the app asks a second factor of gets its code one of two ways, as its third argument: a base32 secret **the script imposes** (an admin API or a seed command that takes it; one per account, from `python3 -c 'import base64,os;print(base64.b32encode(os.urandom(20)).decode())'`), or `repo` when the stack generates the secret itself, which the repo's `ts_totp_cmd` reads back. Never a secret the proof's run enrolled: the human's run enrols another one. Never a step that enrols a new authenticator on each run either: the codes printed stop matching the account.
 - `ts_open <branch> <service> <path…>`, last: the exact screens of the checklist (login, then the screen the change touches), printed and opened in the human's browser (`open`, `xdg-open`, nothing when neither exists).
 - A command that reaches a service of the stack from the host goes through `wtm run <branch> --`, a command in the app container through `wtm exec <branch> --` (see the `wtm` skill).
 - The data is ready before the human opens the app: every list the change touches holds **at least two pages** in its default period, and there is **one account of each kind** the screen tells apart (roles, and deleted or unknown authors when the screen shows authors).
@@ -128,7 +132,7 @@ Open the page in the headless browser: light, dark and phone width, and **click 
 
 ## 7. Hand over
 
-The sheet's path and the page's, one line on what is covered and what is not, and the question: **test OK, or KO with your notes**. Under an orchestrator, that message goes to it.
+The sheet's path and the page's, one line on what is covered and what is not, and the question: **test OK, or KO with your notes**. Under an orchestrator, that message goes to it. The markdown is the document: a field that takes the sheet (a `doc_path`, a link) gets the `.md` path, and the tool finds the `.html` next to it. Given the `.html`, it shows raw source.
 
 ## Common mistakes
 

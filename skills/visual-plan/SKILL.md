@@ -16,7 +16,7 @@ The markdown stays the source: agents implement it, review against it, diff it. 
 
 ## The file
 
-- **Next to the markdown, same name, `.html`**: `plans/SHOP-12/plan.md` → `plans/SHOP-12/plan.html`. Tools that show the plan find the page this way; any other name or folder and it is never shown.
+- **Next to the markdown, same name, `.html`**: `plans/SHOP-12/plan.md` → `plans/SHOP-12/plan.html`. Tools that show the plan find the page this way; any other name or folder and it is never shown. The markdown stays the document: hand over its path (a `doc_path`, a link), never the `.html` one, which such a tool shows as raw source.
 - One self-contained file: CSS inline, no JavaScript but the choice script below, nothing from the network (a Google Fonts stylesheet is the one exception). Images are embedded as `data:` URIs: a tool that keeps a copy of the page keeps that one file, and a relative image path breaks there.
 - Under 8 MB in all: an image is resized to the width it is shown at (1200 px is plenty) and saved as JPEG or WebP.
 - Never touch the markdown. A plan that changes gets its page regenerated.

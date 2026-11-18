@@ -199,6 +199,8 @@ One subagent per milestone, `model: sonnet`, with a checkpoint between milestone
 
 Every agent works in the worktree, against its stack. Never `docker compose restart/stop/up/down` on a shared service, never mutate the main database.
 
+Each milestone prompt says: tracked files, new ones included, are written with the Write and Edit tools, never a shell heredoc (`cat > file <<EOF`) or `sed -i`. A heredoc hides the diff from the transcript and waits on an approval.
+
 ## 6 bis. Self-review
 
 Before the acceptance check, not after: a fix made after the captures invalidates them, while in this order step 7 proves the code that ships.
