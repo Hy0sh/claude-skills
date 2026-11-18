@@ -1,0 +1,159 @@
+<!doctype html>
+<!--
+  Test sheet template. Copy it next to the sheet's markdown (same name, .html), then
+  replace every {{…}} and repeat the blocks marked "repeat". Keep the copy script and
+  the .copy buttons as they are. Images as data: URIs (JPEG, 1200 px wide at most).
+  The page is in the tester's language; the template's sample text is French.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{Fiche de test KEY}}</title>
+<style>
+:root {
+  --bg: #f6f4ef; --surface: #fff; --subtle: #efece4; --ink: #1c2421; --muted: #5e6763; --line: #ddd8cc;
+  --primary: #1f5e4b; --primary-soft: #e3efea; --warn: #9a6200; --warn-soft: #fff3d6;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121916; --surface: #1a2420; --subtle: #202c27; --ink: #e8ece9; --muted: #a2ada8; --line: #2f3c36;
+    --primary: #74c3a3; --primary-soft: #1c3a30; --warn: #e9b85c; --warn-soft: #362a12;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 0 16px; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--font-ui); }
+.wrap { max-width: 960px; margin: 0 auto; padding-block: 32px 72px; display: flex; flex-direction: column; gap: 40px; }
+h1 { font-size: 28px; line-height: 1.2; margin: 0; }
+h2 { font-size: 20px; margin: 0; }
+h3 { font-size: 15px; margin: 0; }
+p { margin: 0; max-width: 70ch; }
+section { display: flex; flex-direction: column; gap: 14px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--subtle); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.muted { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); overflow-wrap: anywhere; }
+.chip b { color: var(--ink); }
+
+.cmd { display: flex; gap: 8px; align-items: stretch; }
+.cmd code { flex: 1; min-width: 0; display: block; padding: 10px 12px; font-size: 13.5px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; user-select: all; }
+.copy { font: inherit; font-size: 14px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--primary); background: var(--primary); color: var(--surface); cursor: pointer; min-width: 88px; }
+.copy.done { background: var(--primary-soft); color: var(--primary); }
+.label { font-size: 13px; color: var(--muted); }
+
+table { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+th { font-size: 12.5px; color: var(--muted); font-weight: 600; background: var(--subtle); }
+.table-box { overflow-x: auto; }
+
+.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.checks li { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; grid-template-columns: 22px 1fr; gap: 10px; }
+.checks input { margin-top: 4px; }
+.checks .do { font-weight: 500; }
+.checks .see { color: var(--muted); }
+
+.screen { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 720px) { .pair { grid-template-columns: 1fr; } .cmd { flex-direction: column; } .copy { padding: 10px; } }
+figure { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+figcaption { font-size: 12.5px; color: var(--muted); }
+
+.gaps { background: var(--warn-soft); border-left: 4px solid var(--warn); border-radius: 6px; padding: 12px 16px; }
+.gaps ul { margin: 0; padding-left: 18px; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+details pre { font-family: var(--font-mono); font-size: 12.5px; overflow-x: auto; margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <h1>{{Fiche de test KEY : titre du ticket}}</h1>
+  <div class="chips">
+    <span class="chip">branche <b>{{feature/ABC-123-some-slug}}</b></span>
+    <span class="chip">commit relu <b>{{abc1234}}</b></span>
+    <span class="chip">base <b>{{develop}}</b></span>
+    <span class="chip">écran <b>{{back-office › Journal}}</b></span>
+  </div>
+  <p class="muted">{{Ce qui est nouveau depuis la dernière fiche de cette branche, en une ou deux phrases ; sinon, supprimer ce paragraphe.}}</p>
+</header>
+
+<section>
+  <h2>1. Lancer</h2>
+  <div class="label">Une fois, quand tu as le temps ({{4 à 5 minutes}} sur une stack neuve) :</div>
+  <div class="cmd"><code>bash /tmp/test-setup-{{ABC-123-some-slug}}.sh</code><button class="copy" type="button">Copier</button></div>
+  <div class="label">Un code de second facteur frais, à tout moment :</div>
+  <div class="cmd"><code>bash /tmp/test-setup-{{ABC-123-some-slug}}.sh totp {{admin@example.test}}</code><button class="copy" type="button">Copier</button></div>
+  <div class="table-box"><table>
+    <tr><th>Compte</th><th>Mot de passe</th><th>Rôle dans le test</th></tr>
+    <!-- repeat: one row per account, the unknown/deleted ones included -->
+    <tr><td><code>{{admin@example.test}}</code></td><td><code>{{Admin-Test-2026!}}</code></td><td>{{tu te connectes avec lui}}</td></tr>
+  </table></div>
+  <p class="muted">À la fin, le script affiche les adresses à ouvrir et le nettoyage, <code>wtm remove {{feature/ABC-123-some-slug}}</code>.</p>
+</section>
+
+<section>
+  <h2>2. Checklist</h2>
+  <!-- repeat: one h3 + list per group (ticket criteria, review points, edge cases) -->
+  <h3>{{Critères du ticket}}</h3>
+  <ul class="checks">
+    <!-- repeat: one item per "do X, you should see Y" -->
+    <li><input type="checkbox"><div><span class="do">{{Fais X.}}</span> <span class="see">{{Tu dois voir Y.}}</span></div></li>
+  </ul>
+</section>
+
+<section>
+  <h2>3. Écrans et maquettes</h2>
+  <!-- repeat: one .screen per screen of the change -->
+  <div class="screen">
+    <h3>{{Nom de l'écran}}</h3>
+    <div class="pair">
+      <figure><img alt="{{capture}}" src="{{data:image/jpeg;base64,…}}"><figcaption>Rendu sur la branche</figcaption></figure>
+      <figure><img alt="{{maquette}}" src="{{data:image/jpeg;base64,…}}"><figcaption>Maquette</figcaption></figure>
+    </div>
+    <p class="muted">{{Écarts assumés avec la maquette, et pourquoi ; sinon supprimer.}}</p>
+  </div>
+</section>
+
+<section>
+  <h2>4. Pas préparé</h2>
+  <div class="gaps"><ul>
+    <!-- repeat -->
+    <li>{{Ce qui n'a pas pu être préparé ou vérifié, et pourquoi.}}</li>
+  </ul></div>
+</section>
+
+<details>
+  <summary>Texte complet du script</summary>
+  <pre>{{contenu de /tmp/test-setup-ABC-123-some-slug.sh, échappé en HTML}}</pre>
+</details>
+
+</div>
+<script>
+// Copies the command next to the button; falls back to selecting it when the clipboard is refused.
+document.addEventListener("click", async e => {
+  const b = e.target.closest(".copy");
+  if (!b) return;
+  const code = b.parentElement.querySelector("code");
+  try {
+    await navigator.clipboard.writeText(code.textContent);
+    b.textContent = "Copié";
+    b.classList.add("done");
+    setTimeout(() => { b.textContent = "Copier"; b.classList.remove("done"); }, 1500);
+  } catch {
+    const r = document.createRange();
+    r.selectNodeContents(code);
+    const s = getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    b.textContent = "⌘C";
+  }
+});
+</script>
+</body>
+</html>
