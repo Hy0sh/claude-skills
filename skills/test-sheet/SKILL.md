@@ -13,7 +13,7 @@ The human tests when they have time, alone: nobody keeps a stack or an agent run
 Shipped with this skill, never rewritten by hand:
 
 - `test-sheet-lib.sh`: `ts_up` (create or start the stack, wait until ready, call the repo's recoveries), `ts_retry`, `ts_account`, `ts_code`, `ts_summary` (logins, current codes, fresh-code commands, cleanup), `ts_open` (the screens to test, opened in the human's browser), and `bash test-sheet-lib.sh selftest`. Read its header once.
-- `sheet-template.html`: the sheet's page, with the « Copier » buttons already wired.
+- `sheet-template.html`: the sheet's page, with the « Copier » buttons already wired: the clipboard when the page is opened on its own, a `postMessage({type: "copy", text})` to the parent when a board shows it in a sandboxed iframe (the board copies), a selection to ⌘C when both are refused.
 
 ## 1. Check the branch
 
@@ -103,7 +103,7 @@ esac
 
 ## 5. Prove it
 
-On **your own isolated stack**, never the human's, never the main stack: copy the script to your scratchpad with the human's branch replaced by yours (`sed 's#feature/ABC-123-some-slug#<your branch>#g'`) and run it as is, with `TS_NO_OPEN=1` so nothing opens on the human's screen. Under an orchestrator that gives you a stack command, start the stack with it first: `ts_up` then finds the worktree and only starts it and waits.
+On **your own isolated stack**, never the human's, never the main stack: copy the script to your scratchpad with the human's branch replaced by yours (`sed 's#feature/ABC-123-some-slug#<your branch>#g'`) and run it as is, with `TS_NO_OPEN=1` so nothing opens on the human's screen. Under an orchestrator that gives you a stack command, start the stack with it first: `ts_up` then finds the worktree and only starts it and waits. Your worktree sits under `.claude/worktrees/`, which `ts_up` refuses to reuse for the human (an agent's stack stops when its task ends, and its URL with it: `ts_up` stops with "branch X is held by <path>"), so add `TS_ALLOW_FOREIGN=1` to your run only. A repo whose agents keep their worktrees elsewhere redefines `ts_foreign_worktree <path>` in its hooks.
 
 - `bash <this skill>/test-sheet-lib.sh selftest` passes.
 - Run the copy's `totp <login>` and each mid-test command once.
