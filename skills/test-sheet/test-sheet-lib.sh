@@ -26,6 +26,7 @@ TS_ONCE=" "
 TS_BRANCH=""
 TS_BASE=""
 TS_URL=""
+TS_COMMIT=""
 TS_START=$SECONDS
 
 # RFC 6238, SHA-1, 30 s, 6 digits; python3 stdlib only. Optional 2nd arg: unix time.
@@ -143,6 +144,11 @@ ts_account() {
   TS_ACCOUNTS+=("$1"$'\t'"$2"$'\t'"${3:-}")
 }
 
+# ts_commit <sha>: the commit the sheet covers; ts_summary warns when the branch moved since.
+ts_commit() {
+  TS_COMMIT="$1"
+}
+
 # ts_code <branch> [login]: the current code of that account (default: the first with one).
 ts_code() {
   local branch="$1" want="${2:-}" line login password secret
@@ -162,7 +168,7 @@ ts_code() {
 }
 
 ts_summary() {
-  local branch="$1" line login password secret code
+  local branch="$1" line login password secret code wt head want
   # The stack can stop during the data commands; never print a dead address.
   if [ -n "$TS_URL" ]; then
     code="$(ts_probe)"
@@ -173,6 +179,16 @@ ts_summary() {
   fi
   echo
   echo "================ Ready to test ================"
+  # A develop merge or a fix commit after the sheet was written makes some lines stale.
+  wt="$(wtm path "$branch" 2>/dev/null || true)"
+  if [ -n "$TS_COMMIT" ] && [ -n "$wt" ]; then
+    head="$(git -C "$wt" rev-parse HEAD 2>/dev/null || true)"
+    want="$(git -C "$wt" rev-parse -q --verify "$TS_COMMIT^{commit}" 2>/dev/null || true)"
+    if [ -n "$head" ] && [ "$head" != "$want" ]; then
+      echo "WARNING: this sheet covers $TS_COMMIT, the branch is now at ${head:0:7}; ask for a fresh sheet."
+      echo
+    fi
+  fi
   for line in ${TS_ACCOUNTS[@]+"${TS_ACCOUNTS[@]}"}; do
     IFS=$'\t' read -r login password secret <<<"$line"
     echo "Login:     $login"
@@ -236,6 +252,7 @@ ts_ready() { [ -f "$dir/warm" ] || { touch "$dir/warm"; return 1; }; }
 ts_totp_cmd() { echo "wtm run \$1 -- pnpm seed:totp"; }
 EOF
   cat >"$dir/body.sh" <<'EOF'
+ts_commit 0000000
 ts_account a@example.test pw GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ
 ts_account b@example.test pw2 repo
 setup() {
@@ -272,6 +289,12 @@ EOF
   fi
   [ "$out" = "branch feature/ABC-1-x is held by /x/repo/.claude/worktrees/agent-1; rerun once it is free" ] || { echo "FAIL foreign line: $out"; fail=1; }
   grep -qE '^(start|create) ' "$dir/wtm.log" && { echo "FAIL foreign stack touched"; fail=1; }
+
+  # The human's own worktree, moved past the commit the sheet covers: reuse it, and warn.
+  git init -q "$dir/wt" && git -C "$dir/wt" -c user.name=t -c user.email=t@t commit -q --allow-empty -m x
+  out="$(PATH="$dir:$PATH" WTM_PATH="$dir/wt" TS_POLL_SECONDS=0 TS_NO_OPEN=1 bash "$dir/test-setup.sh" 2>&1)" || { echo "FAIL own worktree exit: $out"; fail=1; }
+  grep -q '^start feature/ABC-1-x' "$dir/wtm.log" || { echo "FAIL own worktree not started"; fail=1; }
+  grep -q '^WARNING: this sheet covers 0000000, the branch is now at ' <<<"$out" || { echo "FAIL stale warning"; fail=1; }
   rm -rf "$dir"
   [ "$fail" = 0 ] && echo "selftest ok"
   return "$fail"
