@@ -31,8 +31,17 @@ Clean tree and HEAD at the reviewed commit the brief names. Otherwise stop and s
 `~/.config/hy0sh-skills/repos/<owner>/<repo>/test-sheet/hooks.sh` holds what this repo's stacks need beyond the lib. Read it if it exists; otherwise write it from the notes and the `local-app` skill, and add to it whenever a stall teaches something new. It defines only these functions, all optional:
 
 ```bash
-# Known stalls, called every 10 s while the URL is not 200. One try each.
-ts_on_stall() {   # <branch> <elapsed minutes> <last HTTP code>
+# Ready means more than one page answering 200: a dev server can serve /login while
+# other modules still fail (install rewriting node_modules as it started).
+ts_ready() {   # <branch> <service base URL>
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "$2/src/styles.css")" = 200 ] &&
+    ! wtm run "$1" -- docker compose logs --since 1m back-office 2>/dev/null | grep -q 'Internal server error'
+}
+# Known stalls, called every 10 s while not ready. One try each.
+ts_on_stall() {   # <branch> <elapsed minutes> <last HTTP code, or "unready">
+  if [ "$3" = unready ] && ts_once restart-front; then
+    wtm run "$1" -- docker compose restart back-office
+  fi
   # Front stopped after the first boot: 404 that outlasts a normal start.
   if [ "$3" = 404 ] && [ "$2" -ge 6 ] && ts_once front; then
     wtm run "$1" -- docker compose up -d --no-deps back-office
@@ -48,7 +57,7 @@ ts_totp_cmd() {   # <branch> <login> <secret>
 }
 ```
 
-Each recovery is keyed on what the notes say the stall looks like (an HTTP code, a minute threshold when a slow first start answers the same code, a log line) and guarded by `ts_once <name>`, so it runs once. Their output is silenced so the dots stay readable; the 200 is what proves them. Nothing else goes there: no accounts, no data, no branch.
+`ts_ready` checks what a first page answering 200 does not prove: a module of each kind the app loads (a stylesheet entry, a script), and no error in the service's recent logs. Each recovery is keyed on what the notes say the stall looks like (an HTTP code, a minute threshold when a slow first start answers the same code, a log line) and guarded by `ts_once <name>`, so it runs once. Their output is silenced so the dots stay readable; the 200 is what proves them. Nothing else goes there: no accounts, no data, no branch.
 
 ## 4. The setup script
 

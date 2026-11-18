@@ -7,9 +7,12 @@
 #   bash test-sheet-lib.sh selftest               # checks this file, no stack needed
 #
 # Hooks a repo's hooks.sh may define (all optional):
-#   ts_on_stall <branch> <elapsed minutes> <last HTTP code>
-#       called every 10 s while the URL does not answer 200; applies the repo's known
-#       recoveries, each guarded by `ts_once <name> || return 0` so it runs once.
+#   ts_ready <branch> <service base URL>
+#       extra checks once the URL answers 200 (a CSS entry that compiles, no error in
+#       the service's logs); a failure keeps waiting, with "unready" as the code.
+#   ts_on_stall <branch> <elapsed minutes> <last HTTP code or "unready">
+#       called every 10 s while the stack is not ready; applies the repo's known
+#       recoveries, each guarded by `ts_once <name>` so it runs once.
 #   ts_totp_cmd <branch> <login> <secret>
 #       prints the command that gives a fresh code, when the repo has its own
 #       (default: `bash <this file> totp <secret>`).
@@ -71,8 +74,12 @@ ts_up() {
   while [ "$waited" -lt "$TS_TIMEOUT_SECONDS" ]; do
     code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$url" || true)"
     if [ "$code" = "200" ]; then
-      echo " ready"
-      return 0
+      # A page can answer 200 while the dev server still fails on other modules.
+      if ! declare -F ts_ready >/dev/null || ts_ready "$branch" "$base" >/dev/null 2>&1; then
+        echo " ready"
+        return 0
+      fi
+      code="unready"
     fi
     if declare -F ts_on_stall >/dev/null; then
       ts_on_stall "$branch" "$((waited / 60))" "$code" >/dev/null 2>&1 || true
@@ -140,11 +147,13 @@ EOF
   chmod +x "$dir/wtm" "$dir/curl"
   out="$(
     PATH="$dir:$PATH" TS_POLL_SECONDS=0
-    ts_on_stall() { ts_once relaunch || return 0; echo stall >>"$dir/stall.log"; }
+    ts_on_stall() { echo "$3" >>"$dir/codes.log"; ts_once relaunch || return 0; echo stall >>"$dir/stall.log"; }
+    ts_ready() { [ -f "$dir/warm" ] || { touch "$dir/warm"; return 1; }; }
     ts_up feature/ABC-1-x light web /login && ts_account a@example.test pw GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ && ts_summary feature/ABC-1-x
   )" || { echo "FAIL ts_up returned non-zero"; fail=1; }
   grep -q 'create feature/ABC-1-x --profile light' "$dir/wtm.log" || { echo "FAIL create args"; fail=1; }
   [ "$(wc -l <"$dir/stall.log" | tr -d ' ')" = "1" ] || { echo "FAIL ts_on_stall should run its recovery once"; fail=1; }
+  [ "$(tr '\n' ' ' <"$dir/codes.log")" = "404 404 unready " ] || { echo "FAIL ts_ready failure should stall as unready"; fail=1; }
   grep -q 'http://web.x.localhost:1/login ..* ready' <<<"$out" || { echo "FAIL wait line"; fail=1; }
   grep -q '^New code:  bash .*test-sheet-lib.sh totp GEZD' <<<"$out" || { echo "FAIL fresh-code line"; fail=1; }
   grep -q '^Code now:  [0-9]\{6\}$' <<<"$out" || { echo "FAIL current code"; fail=1; }
