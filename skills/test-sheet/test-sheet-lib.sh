@@ -77,7 +77,7 @@ ts_foreign_worktree() {
 ts_vite_check() {
   local entry out code path
   TS_VITE_BAD=""
-  entry="$(curl -s -m 5 "$TS_URL" | grep -oE 'src="/[^@"][^"]*"' | head -n 1 | sed 's/^src="//; s/"$//' || true)"
+  entry="$(curl -s -m 5 "$TS_URL" | grep -oE '<script[^>]*type="module"[^>]*src="/[^@"][^"]*"' | head -n 1 | sed 's/.*src="//; s/"$//' || true)"
   [ -z "$entry" ] && return 0
   out="$(curl -s -m 10 -w '\n%{http_code}' "$TS_BASE$entry" || true)"
   code="${out##*$'\n'}"
@@ -112,7 +112,7 @@ ts_probe() {
 # until <service><path> answers 200 and ts_ready passes, calling ts_on_stall meanwhile.
 ts_up() {
   local branch="$1" profile="$2" service="$3" path="$4"
-  local args=() held
+  local args=() held vite504=0
   TS_BRANCH="$branch"
   TS_START=$SECONDS
   [ "$profile" != "-" ] && args=(--profile "$profile")
@@ -144,8 +144,10 @@ ts_up() {
       echo " ready"
       return 0
     fi
-    # Vite's optimizer does not retry after a crash: restart that service, once.
-    if [ "${TS_VITE_BAD##* }" = 504 ] && ts_once vite-restart; then
+    # Vite's optimizer does not retry after a crash: restart that service, once. Vite also
+    # answers 504 briefly while it re-optimizes on a fresh start, so wait for two in a row.
+    if [ "${TS_VITE_BAD##* }" = 504 ]; then vite504=$((vite504 + 1)); else vite504=0; fi
+    if [ "$vite504" -ge 2 ] && ts_once vite-restart; then
       echo
       echo "Vite's dependencies answer 504 ($TS_VITE_BAD); restarting $service once."
       wtm run "$branch" -- docker compose restart "$service" >/dev/null 2>&1 || true
@@ -254,6 +256,10 @@ ts_paste_login() {
       password) name="the password"; value="$password" ;;
       code) [ -z "$secret" ] && break; name="the second-factor code"; value="$(ts_code "$branch" "$login")" ;;
     esac
+    if [ -z "$value" ]; then
+      echo "No code available; run: bash $TS_SELF totp $login"
+      return 0
+    fi
     if ! printf '%s' "$value" | ts_copy; then
       echo "No clipboard tool (pbcopy, xclip, wl-copy): use the values printed above."
       return 0
@@ -360,14 +366,18 @@ for a in "$@"; do
 done
 code=200; body=""
 case "$url" in
-  */.vite/deps/*) [ -f "$d/vite-broken" ] && code=504 ;;
+  */.vite/deps/*)
+    if [ -f "$d/vite-broken" ]; then code=504
+    elif [ -f "$d/vite-blip" ]; then rm -f "$d/vite-blip"; code=504
+    fi ;;
   */src/main.tsx) body='import r from "/node_modules/.vite/deps/react.js?v=1a";' ;;
   */login)
     if [ -n "$o" ]; then
       n=$(cat "$d/n" 2>/dev/null || echo 0); echo $((n + 1)) >"$d/n"
       [ "$n" -ge 2 ] || code=404
     else
-      body='<script type="module" src="/@vite/client"></script><script type="module" src="/src/main.tsx"></script>'
+      # an image and a classic script come first: neither is the entry module
+      body='<img src="/logo.png"><script src="/classic.js"></script><script type="module" src="/@vite/client"></script><script type="module" src="/src/main.tsx"></script>'
     fi ;;
 esac
 if [ -n "$o" ]; then printf '%s' "$code"; else printf '%s' "$body"; [ -n "$w" ] && printf '\n%s' "$code"; fi
@@ -442,6 +452,20 @@ EOF
   grep -q "^Service 'web' still serves a broken Vite after one restart: http://web.x.localhost:1/node_modules/.vite/deps/react.js?v=1a 504\.$" <<<"$out" || { echo "FAIL vite stop line: $out"; fail=1; }
   [ "$(grep -c 'docker compose restart web$' "$dir/wtm.log")" = 1 ] || { echo "FAIL vite restart should stay once"; fail=1; }
   rm -f "$dir/vite-broken"
+
+  # One 504 that clears by itself (Vite re-optimizing): no restart.
+  : >"$dir/wtm.log"; touch "$dir/vite-blip"
+  out="$(PATH="$dir:$PATH" TS_POLL_SECONDS=0 TS_NO_OPEN=1 bash "$dir/test-setup.sh" 2>&1)" || { echo "FAIL vite blip exit: $out"; fail=1; }
+  grep -q 'docker compose restart' "$dir/wtm.log" && { echo "FAIL vite blip should not restart"; fail=1; }
+  rm -f "$dir/vite-blip"
+
+  # A repo secret whose command yields no code: nothing copied, the helper command named.
+  sed -e '/^ts_account a@example.test/d' "$dir/body.sh" >"$dir/body2.sh"
+  { cat "$lib"; echo; echo 'ts_on_stall() { :; }; ts_totp_cmd() { echo false; }'; echo; cat "$dir/body2.sh"; } >"$dir/test-setup2.sh"
+  : >"$dir/clip.log"
+  out="$(printf '\n\n\n' | PATH="$dir:$PATH" TS_INTERACTIVE=1 TS_POLL_SECONDS=0 TS_NO_OPEN=1 bash "$dir/test-setup2.sh" 2>&1)" || { echo "FAIL empty code exit: $out"; fail=1; }
+  grep -q "No code available; run: bash $dir/test-setup2.sh totp b@example.test$" <<<"$out" || { echo "FAIL empty code line: $out"; fail=1; }
+  [ "$(tr '\n' ' ' <"$dir/clip.log")" = "b@example.test pw2 " ] || { echo "FAIL empty code clipboard: $(tr '\n' ' ' <"$dir/clip.log")"; fail=1; }
 
   # Sign-in values on the clipboard, one per Enter: login, password, then the current code.
   : >"$dir/clip.log"
