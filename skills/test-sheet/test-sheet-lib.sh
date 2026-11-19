@@ -28,6 +28,8 @@ TS_BASE=""
 TS_URL=""
 TS_COMMIT=""
 TS_START=$SECONDS
+TS_CODE=""
+TS_VITE_BAD=""
 
 # RFC 6238, SHA-1, 30 s, 6 digits; python3 stdlib only. Optional 2nd arg: unix time.
 ts_totp() {
@@ -67,15 +69,43 @@ ts_foreign_worktree() {
   return 1
 }
 
-# Prints 200 when TS_URL answers 200 and ts_ready passes, else the HTTP code or "unready".
-ts_probe() {
-  local code
-  code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$TS_URL" || true)"
-  # A page can answer 200 while the dev server still fails on other modules.
-  if [ "$code" = 200 ] && declare -F ts_ready >/dev/null && ! ts_ready "$TS_BRANCH" "$TS_BASE" >/dev/null 2>&1; then
-    code=unready
+# Vite's dependency optimizer can crash once at start (an install rewriting node_modules
+# under it) and then answers 504 on every /node_modules/.vite/deps/* for good, while the
+# pages still answer 200. Reads the page's entry module and requires 200 on up to 3 of its
+# prebundled imports. On failure sets TS_VITE_BAD to "<url> <code>". No entry module or no
+# such import (not a Vite page): nothing to check.
+ts_vite_check() {
+  local entry out code path
+  TS_VITE_BAD=""
+  entry="$(curl -s -m 5 "$TS_URL" | grep -oE 'src="/[^@"][^"]*"' | head -n 1 | sed 's/^src="//; s/"$//' || true)"
+  [ -z "$entry" ] && return 0
+  out="$(curl -s -m 10 -w '\n%{http_code}' "$TS_BASE$entry" || true)"
+  code="${out##*$'\n'}"
+  if [ "$code" != 200 ]; then
+    TS_VITE_BAD="$TS_BASE$entry ${code:-000}"
+    return 1
   fi
-  echo "$code"
+  for path in $(printf '%s' "${out%$'\n'*}" | grep -oE '/node_modules/\.vite/deps/[A-Za-z0-9_./@-]+(\?[A-Za-z0-9=&_.-]+)?' | sort -u | head -n 3 || true); do
+    code="$(curl -s -o /dev/null -m 10 -w '%{http_code}' "$TS_BASE$path" || true)"
+    if [ "$code" != 200 ]; then
+      TS_VITE_BAD="$TS_BASE$path ${code:-000}"
+      return 1
+    fi
+  done
+}
+
+# Sets TS_CODE to 200 when TS_URL answers 200, Vite's deps load and ts_ready passes, else
+# the HTTP code or "unready". Not a subshell: TS_VITE_BAD must survive for ts_up.
+ts_probe() {
+  TS_VITE_BAD=""
+  TS_CODE="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$TS_URL" || true)"
+  # A page can answer 200 while the dev server still fails on other modules.
+  if [ "$TS_CODE" = 200 ] && ! ts_vite_check; then
+    TS_CODE=unready
+  fi
+  if [ "$TS_CODE" = 200 ] && declare -F ts_ready >/dev/null && ! ts_ready "$TS_BRANCH" "$TS_BASE" >/dev/null 2>&1; then
+    TS_CODE=unready
+  fi
 }
 
 # ts_up <branch> <profile|-> <service> <path>: create or restart the stack, then wait
@@ -108,16 +138,26 @@ ts_up() {
   TS_URL="$TS_BASE$path"
   printf 'Waiting for %s ' "$TS_URL"
   while [ $((SECONDS - TS_START)) -lt "$TS_TIMEOUT_SECONDS" ]; do
-    code="$(ts_probe)"
+    ts_probe
+    code="$TS_CODE"
     if [ "$code" = 200 ]; then
       echo " ready"
       return 0
+    fi
+    # Vite's optimizer does not retry after a crash: restart that service, once.
+    if [ "${TS_VITE_BAD##* }" = 504 ] && ts_once vite-restart; then
+      echo
+      echo "Vite's dependencies answer 504 ($TS_VITE_BAD); restarting $service once."
+      wtm run "$branch" -- docker compose restart "$service" >/dev/null 2>&1 || true
     fi
     ts_stall "$code"
     printf '.'
     sleep "$TS_POLL_SECONDS"
   done
   echo
+  if [ -n "$TS_VITE_BAD" ]; then
+    echo "Service '$service' still serves a broken Vite after one restart: $TS_VITE_BAD." >&2
+  fi
   echo "The stack did not get ready on $TS_URL in $((TS_TIMEOUT_SECONDS / 60)) min (last: $code)." >&2
   echo "Send this output to whoever prepared the sheet; \`wtm remove $branch\` cleans up." >&2
   return 1
@@ -167,11 +207,73 @@ ts_code() {
   return 1
 }
 
+# Copies stdin's text to the clipboard (pbcopy, else xclip, else wl-copy); false when none.
+ts_copy() {
+  if command -v pbcopy >/dev/null; then pbcopy
+  elif command -v xclip >/dev/null; then xclip -selection clipboard
+  elif command -v wl-copy >/dev/null; then wl-copy
+  else return 1
+  fi
+}
+
+# A human at a terminal (the clipboard is theirs): not the agent's proof run (TS_NO_OPEN),
+# not a pipe. TS_INTERACTIVE=1 forces it, for the selftest.
+ts_interactive() {
+  [ -n "${TS_INTERACTIVE:-}" ] || { [ -t 0 ] && [ -z "${TS_NO_OPEN:-}" ]; }
+}
+
+# ts_code_show <branch> [login]: prints a fresh code, and copies it for pasting.
+ts_code_show() {
+  local code
+  code="$(ts_code "$@")" || return 1
+  echo "$code"
+  if ts_interactive && printf '%s' "$code" | ts_copy; then
+    echo "(code copied to the clipboard)" >&2
+  fi
+}
+
+# ts_paste_login <branch> [login]: the sign-in values, one at a time on the clipboard
+# (login, password, then the current code, made last as it lives 30 s); Enter moves on.
+# Without a human or a clipboard tool, nothing: ts_summary has printed them all.
+ts_paste_login() {
+  local branch="$1" want="${2:-}" line login password secret pick="" v name value
+  ts_interactive || return 0
+  for line in ${TS_ACCOUNTS[@]+"${TS_ACCOUNTS[@]}"}; do
+    IFS=$'\t' read -r login password secret <<<"$line"
+    [ -n "$want" ] && [ "$want" != "$login" ] && continue
+    pick="$line"
+    break
+  done
+  [ -z "$pick" ] && return 0
+  IFS=$'\t' read -r login password secret <<<"$pick"
+  echo
+  echo "Sign-in: each value goes to the clipboard in turn; paste it in the form, then press Enter."
+  for v in login password code; do
+    case "$v" in
+      login) name="the login"; value="$login" ;;
+      password) name="the password"; value="$password" ;;
+      code) [ -z "$secret" ] && break; name="the second-factor code"; value="$(ts_code "$branch" "$login")" ;;
+    esac
+    if ! printf '%s' "$value" | ts_copy; then
+      echo "No clipboard tool (pbcopy, xclip, wl-copy): use the values printed above."
+      return 0
+    fi
+    printf 'Copied %s.' "$name"
+    if [ "$v" != code ] && { [ "$v" != password ] || [ -n "$secret" ]; }; then
+      printf ' Enter for the next: '
+      read -r _ || true
+    else
+      echo
+    fi
+  done
+}
+
 ts_summary() {
   local branch="$1" line login password secret code wt head want
   # The stack can stop during the data commands; never print a dead address.
   if [ -n "$TS_URL" ]; then
-    code="$(ts_probe)"
+    ts_probe
+    code="$TS_CODE"
     if [ "$code" != 200 ]; then
       echo "The stack stopped answering on $TS_URL (last: $code); rerun the script." >&2
       return 1
@@ -203,7 +305,8 @@ ts_summary() {
 }
 
 # ts_open <branch> <service> <path>...: print the screens to test and open them in the
-# human's browser; TS_NO_OPEN=1 (the agent's own proof) only prints them.
+# human's browser, then walk the first account's sign-in values through the clipboard
+# (ts_paste_login); TS_NO_OPEN=1 (the agent's own proof) only prints the screens.
 ts_open() {
   local branch="$1" service="$2" base path opener=""
   shift 2
@@ -218,6 +321,8 @@ ts_open() {
     echo "  $base$path"
     [ -n "$opener" ] && "$opener" "$base$path" >/dev/null 2>&1 || true
   done
+  # Last step of the setup: the sign-in values for the form just opened.
+  ts_paste_login "$branch"
 }
 
 ts_selftest() {
@@ -238,13 +343,39 @@ case "$1" in
   create) exit 1 ;;
   ports) printf 'urls, through traefik\n  web/url  http://web.x.localhost:1\n\nports\n  db  localhost:2\n' ;;
   exec) n=$(cat "$d/e" 2>/dev/null || echo 0); echo $((n + 1)) >"$d/e"; [ "$n" -ge 1 ] ;;
-  run) printf 'banner\n> seed:totp\n123456\n' ;;
+  run) case "$*" in
+    *restart*) [ -n "${WTM_KEEP_BROKEN:-}" ] || rm -f "$d/vite-broken" ;;
+    *) printf 'banner\n> seed:totp\n123456\n' ;;
+  esac ;;
 esac
 EOF
+  # /login: 404 twice then 200 (its HTML names the entry module); the entry module imports
+  # a prebundled dep; deps answer 504 while a vite-broken file exists (a restart removes it).
   cat >"$dir/curl" <<'EOF'
 #!/usr/bin/env bash
-n=$(cat "$(dirname "$0")/n" 2>/dev/null || echo 0); echo $((n + 1)) >"$(dirname "$0")/n"
-[ "$n" -ge 2 ] && printf 200 || printf 404
+d="$(dirname "$0")"; url=""; w=""; o=""
+for a in "$@"; do
+  case "$a" in -w) w=1 ;; -o) o=1 ;; esac
+  url="$a"
+done
+code=200; body=""
+case "$url" in
+  */.vite/deps/*) [ -f "$d/vite-broken" ] && code=504 ;;
+  */src/main.tsx) body='import r from "/node_modules/.vite/deps/react.js?v=1a";' ;;
+  */login)
+    if [ -n "$o" ]; then
+      n=$(cat "$d/n" 2>/dev/null || echo 0); echo $((n + 1)) >"$d/n"
+      [ "$n" -ge 2 ] || code=404
+    else
+      body='<script type="module" src="/@vite/client"></script><script type="module" src="/src/main.tsx"></script>'
+    fi ;;
+esac
+if [ -n "$o" ]; then printf '%s' "$code"; else printf '%s' "$body"; [ -n "$w" ] && printf '\n%s' "$code"; fi
+exit 0
+EOF
+  cat >"$dir/pbcopy" <<'EOF'
+#!/usr/bin/env bash
+cat >>"$(dirname "$0")/clip.log"; echo >>"$(dirname "$0")/clip.log"
 EOF
   cat >"$dir/hooks.sh" <<EOF
 ts_on_stall() { echo "\$3" >>"$dir/codes.log"; ts_once relaunch || return 0; echo stall >>"$dir/stall.log"; }
@@ -263,13 +394,13 @@ setup() {
 }
 case "${1:-}" in
   "") setup ;;
-  totp) ts_code feature/ABC-1-x "${2:-}" ;;
+  totp) ts_code_show feature/ABC-1-x "${2:-}" ;;
   expire) echo expired ;;
   *) exit 2 ;;
 esac
 EOF
   { cat "$lib"; echo; cat "$dir/hooks.sh"; echo; cat "$dir/body.sh"; } >"$dir/test-setup.sh"
-  chmod +x "$dir/wtm" "$dir/curl"
+  chmod +x "$dir/wtm" "$dir/curl" "$dir/pbcopy"
   out="$(PATH="$dir:$PATH" TS_POLL_SECONDS=0 TS_NO_OPEN=1 bash "$dir/test-setup.sh" 2>&1)" || { echo "FAIL setup exit: $out"; fail=1; }
   grep -q 'create feature/ABC-1-x --profile light' "$dir/wtm.log" || { echo "FAIL create args"; fail=1; }
   [ "$(wc -l <"$dir/stall.log" | tr -d ' ')" = "1" ] || { echo "FAIL recovery should run once"; fail=1; }
@@ -295,6 +426,33 @@ EOF
   out="$(PATH="$dir:$PATH" WTM_PATH="$dir/wt" TS_POLL_SECONDS=0 TS_NO_OPEN=1 bash "$dir/test-setup.sh" 2>&1)" || { echo "FAIL own worktree exit: $out"; fail=1; }
   grep -q '^start feature/ABC-1-x' "$dir/wtm.log" || { echo "FAIL own worktree not started"; fail=1; }
   grep -q '^WARNING: this sheet covers 0000000, the branch is now at ' <<<"$out" || { echo "FAIL stale warning"; fail=1; }
+
+  # Vite's deps answer 504 behind a page that answers 200: restart the front end once,
+  # wait again, and go on.
+  : >"$dir/wtm.log"; touch "$dir/vite-broken"
+  out="$(PATH="$dir:$PATH" TS_POLL_SECONDS=0 TS_NO_OPEN=1 bash "$dir/test-setup.sh" 2>&1)" || { echo "FAIL vite restart exit: $out"; fail=1; }
+  [ "$(grep -c '^run feature/ABC-1-x -- docker compose restart web$' "$dir/wtm.log")" = 1 ] || { echo "FAIL vite restart once"; fail=1; }
+  grep -q 'deps/react.js?v=1a 504' <<<"$out" || { echo "FAIL vite 504 line"; fail=1; }
+
+  # Still 504 after the restart: stop, naming the service and the failing URL.
+  : >"$dir/wtm.log"; touch "$dir/vite-broken"
+  if out="$(PATH="$dir:$PATH" WTM_KEEP_BROKEN=1 TS_TIMEOUT_SECONDS=3 TS_POLL_SECONDS=0 TS_NO_OPEN=1 bash "$dir/test-setup.sh" 2>&1)"; then
+    echo "FAIL vite still broken should stop"; fail=1
+  fi
+  grep -q "^Service 'web' still serves a broken Vite after one restart: http://web.x.localhost:1/node_modules/.vite/deps/react.js?v=1a 504\.$" <<<"$out" || { echo "FAIL vite stop line: $out"; fail=1; }
+  [ "$(grep -c 'docker compose restart web$' "$dir/wtm.log")" = 1 ] || { echo "FAIL vite restart should stay once"; fail=1; }
+  rm -f "$dir/vite-broken"
+
+  # Sign-in values on the clipboard, one per Enter: login, password, then the current code.
+  : >"$dir/clip.log"
+  out="$(printf '\n\n\n' | PATH="$dir:$PATH" TS_INTERACTIVE=1 TS_POLL_SECONDS=0 TS_NO_OPEN=1 bash "$dir/test-setup.sh" 2>&1)" || { echo "FAIL clipboard exit: $out"; fail=1; }
+  [ "$(tr '\n' ' ' <"$dir/clip.log")" = "a@example.test pw $(ts_totp GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ) " ] || { echo "FAIL clipboard values: $(tr '\n' ' ' <"$dir/clip.log")"; fail=1; }
+  grep -q '^Password:  pw$' <<<"$out" || { echo "FAIL values still printed"; fail=1; }
+  # The fresh-code helper copies the code too, and still prints only it on stdout.
+  : >"$dir/clip.log"
+  out="$(PATH="$dir:$PATH" TS_INTERACTIVE=1 bash "$dir/test-setup.sh" totp a@example.test 2>/dev/null)"
+  [ "$out" = "$(ts_totp GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ)" ] && [ "$(cat "$dir/clip.log")" = "$out" ] || { echo "FAIL totp clipboard"; fail=1; }
+
   rm -rf "$dir"
   [ "$fail" = 0 ] && echo "selftest ok"
   return "$fail"
