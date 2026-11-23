@@ -1,11 +1,11 @@
 ---
 name: vault-update
-description: Use when the user asks to update their Obsidian vault or memory — « mets à jour Obsidian », « mets à jour le vault », « mémorise ça », « note ça dans le vault », "update my notes/memory". Proposes what to remember from the session, checks project notes against the project's business source of truth (Studio, Jira…), writes only after approval. Never writes on its own initiative.
+description: Use on your own, without being asked, as soon as a session yields something durable to remember — a rule or preference the user states, a correction of your way of working, a decision, a trap found — and when the user asks to update their Obsidian vault or memory — « mets à jour Obsidian », « mets à jour le vault », « mémorise ça », « note ça dans le vault », "update my notes/memory". The vault replaces Claude Code's auto memory: writes the note and its index line, commits, says it in one line; asks only when a project note contradicts the project's business source of truth (Studio, Jira…).
 ---
 
 # vault-update
 
-`~/notes` is the user's only Claude memory (auto memory is off). Each folder's index note is named after its folder, so Obsidian's graph labels it (`commun/commun.md`, `commun/acw/acw.md`, `projets/<x>/<x>.md`). `commun/commun.md` loads in every session; `projets/<x>/<x>.md` loads in the sessions of project `<x>` because `<repo>/CLAUDE.local.md` is a symlink to it. Nothing reaches the vault unless the user asked, and nothing is written before they agree.
+`~/notes` is the user's only Claude memory (auto memory is off). Each folder's index note is named after its folder, so Obsidian's graph labels it (`commun/commun.md`, `commun/acw/acw.md`, `projets/<x>/<x>.md`). `commun/commun.md` loads in every session; `projets/<x>/<x>.md` loads in the sessions of project `<x>` because `<repo>/CLAUDE.local.md` is a symlink to it. Like the auto memory it replaces, it is kept up to date without being asked: write as soon as something durable appears, then tell the user in one line what was noted and where. The one stop: a project note that contradicts the project's source of truth waits for the user's call (step 3).
 
 ## 1. Locate
 
@@ -18,9 +18,7 @@ description: Use when the user asks to update their Obsidian vault or memory —
 
 From the session (and what the user just dictated), list candidates. Keep only what will still be true and useful in a month: a rule, a decision, a trap, a preference, a command. Drop session state, what git/Jira/the code already says, and anything unverified (or mark it `non vérifié`).
 
-Write the candidates to a markdown file outside any repo (e.g. `~/.claude/plans/vault/<date>-maj-vault.md`), grouped under one heading per destination (project notes, common notes), one list item per candidate:
-`[créer|modifier] <path> (<type>) : <the fact in one sentence>`
-The divergences of step 3 go in the same file. Then render it with the `hy0sh-skills:visual-plan` skill (page next to the markdown, same name, `.html`): the user reads the page, not a list in the chat.
+When the user asked for a review of the whole session (« mets à jour Obsidian »), list the candidates in a markdown file outside any repo (e.g. `~/.claude/plans/vault/<date>-maj-vault.md`), one list item per candidate, `[créer|modifier] <path> (<type>) : <the fact in one sentence>`, render it with `hy0sh-skills:visual-plan`, and write them without waiting (step 4): the page is the record of what was noted. A single fact noted on your own needs no file.
 - Destination: `commun/` if it holds on any project (dev preferences, ways of working, generic traps), `projets/<x>/notes/` otherwise (the index sorts them by theme). A project name or client fact never goes in `commun/`.
 - Prefer modifying an existing note over creating one: `grep -ril` the vault first.
 
@@ -36,14 +34,16 @@ For each project candidate that touches business rules, glossary or decisions, f
 
 Never decide which is right. Duplicating the source is fine; contradicting it silently is not. No source named in the index → say so and skip this step.
 
-## 4. Ask, then write
+A divergence is the only thing asked: with AskUserQuestion, or, from an orchestrator's master, as a decision parked under `## Choix à valider` (`(a) …; (b) …`, `Reco: (a)`). The candidate waits for the answer; the others are written at once.
 
-Put the decision in the same file under `## Choix à valider`, as `(a) …; (b) …` list items, each with a `Reco: (a)`: keep all / some / none of the candidates, and a side per divergence. Re-render the page, so a board that shows it can take the answer. Outside such a board, ask with AskUserQuestion (keep / change / drop per candidate, and a side for each divergence). Then write with the `obsidian:obsidian-markdown` format:
+## 4. Write, commit, tell
+
+Write with the `obsidian:obsidian-markdown` format:
 - frontmatter `type` (regle | decision | piege | preference | reference), `projet` (`commun` or `<x>`), `maj` (today, YYYY-MM-DD);
 - one subject per note, short; link it from its index with `[[...]]` and a one-line hook.
 - An index stays at ~60 lines max: past that, group lines into a sub-note and link it instead.
 
-Show `git -C ~/notes diff --stat` and the diff, commit only after the user's go: `git -C ~/notes add -A && git -C ~/notes commit -m "<projet>: <what>"`.
+Commit the files you wrote, and only those (another session may be writing too): `git -C ~/notes add <files> && git -C ~/notes commit -m "<projet>: <what>"`. Then one line to the user: what was noted, in which note. Undoing it is theirs to ask.
 
 ## 5. New project (on request)
 
@@ -55,4 +55,5 @@ Then give the project its colour in Obsidian's graph: in `~/notes/.obsidian/grap
 
 - Write to the source of truth (Studio, Jira) unless the project index allows it, or into a client repo beyond the `CLAUDE.local.md` symlink and its line in `.git/info/exclude`.
 - Put one client's facts in another client's folder or in `commun/`.
-- Write without the user's explicit agreement in this run.
+- Write a project note that contradicts its source of truth before the user chose a side.
+- Note session state, what git, Jira or the code already says, or a guess.
