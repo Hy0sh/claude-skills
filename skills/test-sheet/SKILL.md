@@ -12,7 +12,7 @@ The human tests when they have time, alone: nobody keeps a stack or an agent run
 
 Shipped with this skill, never rewritten by hand:
 
-- `test-sheet-lib.sh`: `ts_up` (create or start the stack, wait until ready, call the repo's recoveries), `ts_retry`, `ts_account`, `ts_code`, `ts_summary` (logins, current codes, fresh-code commands, cleanup), `ts_open` (the screens to test, opened in the human's browser), and `bash test-sheet-lib.sh selftest`. Read its header once.
+- `test-sheet-lib.sh`: `ts_up` (create or start the stack, wait until ready, call the repo's recoveries; when the page's Vite dependencies answer 504 it restarts that service once, then stops naming the service and the URL if they still fail), `ts_retry`, `ts_account`, `ts_code`, `ts_code_show` (a fresh code, printed and copied), `ts_summary` (logins, current codes, fresh-code commands, cleanup), `ts_open` (the screens to test, opened in the human's browser, then the first account's login, password and current code handed over one at a time through the clipboard), and `bash test-sheet-lib.sh selftest`. Read its header once.
 - `sheet-template.html`: the sheet's page, with the « Copier » buttons already wired: the clipboard when the page is opened on its own, a `postMessage({type: "copy", text})` to the parent when a board shows it in a sandboxed iframe (the board copies), a selection to ⌘C when both are refused.
 
 ## 1. Check the branch
@@ -60,7 +60,7 @@ ts_totp_cmd() {   # <branch> <login>
 }
 ```
 
-`ts_ready` checks what a first page answering 200 does not prove: a module of each kind the app loads (a stylesheet entry, a script), and no error in the service's recent logs. Each recovery is keyed on what the notes say the stall looks like (an HTTP code, a minute threshold when a slow first start answers the same code, a log line) and guarded by `ts_once <name>`, so it runs once. Their output is silenced so the dots stay readable; the 200 is what proves them. Nothing else goes there: no accounts, no data, no branch.
+The lib already checks Vite itself: `ts_up` also fetches the page's entry module and requires 200 on its `/node_modules/.vite/deps/…` imports, because a crashed dependency optimizer leaves them on 504 while every page answers 200. `ts_ready` is for what is specific to the repo. It checks what a first page answering 200 does not prove: a module of each kind the app loads (a stylesheet entry, a script), and no error in the service's recent logs. Each recovery is keyed on what the notes say the stall looks like (an HTTP code, a minute threshold when a slow first start answers the same code, a log line) and guarded by `ts_once <name>`, so it runs once. Their output is silenced so the dots stay readable; the 200 is what proves them. Nothing else goes there: no accounts, no data, no branch.
 
 ## 4. The setup script
 
@@ -88,7 +88,7 @@ setup() {
 
 case "${1:-}" in
   "") setup ;;
-  totp) ts_code feature/ABC-123-some-slug "${2:-}" ;;
+  totp) ts_code_show feature/ABC-123-some-slug "${2:-}" ;;
   # Commands the checklist asks for mid-test, one per state the human cannot reach by hand:
   expire-invitation) wtm exec feature/ABC-123-some-slug -- pnpm invitation:expire admin@example.test ;;
   *) echo "usage: bash $0 [totp <login> | expire-invitation]" >&2; exit 2 ;;
@@ -100,7 +100,8 @@ esac
 - `ts_retry <tries> <seconds> <command…>` for the first data commands: a service can still be installing when the screen already answers. Between two tries the repo's recoveries run (`ts_on_stall … retry`).
 - Every data command can run twice: it checks first, or tolerates "already exists". The human may rerun the script.
 - An account the app asks a second factor of gets its code one of two ways, as its third argument: a base32 secret **the script imposes** (an admin API or a seed command that takes it; one per account, from `python3 -c 'import base64,os;print(base64.b32encode(os.urandom(20)).decode())'`), or `repo` when the stack generates the secret itself, which the repo's `ts_totp_cmd` reads back. Never a secret the proof's run enrolled: the human's run enrols another one. Never a step that enrols a new authenticator on each run either: the codes printed stop matching the account.
-- `ts_open <branch> <service> <path…>`, last: the exact screens of the checklist (login, then the screen the change touches), printed and opened in the human's browser (`open`, `xdg-open`, nothing when neither exists).
+- `ts_open <branch> <service> <path…>`, last: the exact screens of the checklist (login, then the screen the change touches), printed and opened in the human's browser (`open`, `xdg-open`, nothing when neither exists). It then hands the first account's sign-in values over through the clipboard (`pbcopy`, else `xclip`, else `wl-copy`): login, Enter, password, Enter, the current code, so the human pastes each into the form. No autologin, no script that signs in for them. The values stay printed in the final block too. Nothing is copied without a human at a terminal or when `TS_NO_OPEN=1` (your proof run must not touch the human's clipboard), and without a clipboard tool the script just prints.
+- The `totp` subcommand calls `ts_code_show`: it prints the fresh code and copies it.
 - A command that reaches a service of the stack from the host goes through `wtm run <branch> --`, a command in the app container through `wtm exec <branch> --` (see the `wtm` skill).
 - The data is ready before the human opens the app: every list the change touches holds **at least two pages** in its default period, and there is **one account of each kind** the screen tells apart (roles, and deleted or unknown authors when the screen shows authors).
 - Data goes through the product's own paths (seed scripts, use cases, admin) when it has them; a direct SQL insert only for a state the product cannot produce on purpose (a corrupted row, a deleted author), and the checklist says which.
