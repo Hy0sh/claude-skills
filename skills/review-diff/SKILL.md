@@ -66,10 +66,13 @@ Every user-visible text, value, limit, count or duration the diff adds or change
 - **Against its twin.** For every error code, refusal or status the diff turns into a user-visible text, grep the other clients of the same back end (another app, a mobile and a web front) for the text they show for that same code. Two different texts for one case are a defect unless a recorded decision says why.
 
 - **Against the sources matrix.** When the plan carries a "Sources, word for word" matrix (ticket, business rules, `AGENTS.md` rules of the touched folders), check every line against the code at the reviewed head, not against the plan's summary of it. A line with no realizing file and no follow-up ticket is a finding.
+- **Against the ticket's validation rules.** Read the ticket yourself (the tracker the project notes name as the reference), not only the plan: each validation rule and acceptance criterion is realized in the code, or set aside explicitly in the accepted plan with its reason. A rule nobody realized nor set aside, or one the plan marks done that the code does not do, is a finding.
 
 The review states which source it checked against. With no business source and no readable ticket, it says so in its first line.
 
 When a review checklist was found, walk each of its items against the diff and report the ones that apply and fail like any other finding; an item the diff does not touch is skipped silently.
+
+**Written code rules.** Check every added line against the code rules the project notes and the `AGENTS.md` (or equivalent) of the touched folders write down: the constructs they forbid, the form they require, a rule or a constant copied instead of reused. A breach is reported even when the behaviour is right: the rule is the team's, not a matter of taste. When two of these sources disagree, the `AGENTS.md` nearest to the file wins.
 
 Then read the diff's own additions for what they make superfluous: a guard, a branch or a validation an upstream layer already guarantees (check the caller or the serializer on the reviewed branch), a helper or a parameter no caller uses once the diff is applied, a field kept only for the code it replaced. Dead code the diff creates is reported against the diff; dead code that was already there goes under pre-existing defects.
 
@@ -104,6 +107,18 @@ On top of the confirmation above, the review plays the acceptance criteria in th
 Use the project's own skill for this when it has one (a ticket-verification skill), else drive the screen as the confirmation step does. Play each testable criterion once; a criterion that fails is a finding with its evidence level "confirmed at runtime". Write in the report which criteria were played, which could not be, and how long the pass took (stack start, then criteria).
 
 No free stack is not "runtime out of reach" and is no reason to wait: deliver the static review at once, its first line saying "criteria not played: no free stack", and let the caller schedule the pass for later.
+
+### Scenarios imposed by the change's type
+
+The ticket's criteria follow the nominal path; what the change writes elsewhere needs its own scenarios. On top of the criteria, play on the stack those the diff's type calls for, all of them when it is of several types; played, never read. When the project notes give their own grid, it replaces this one.
+
+- A script or a dev tool the diff adds or changes: run on a fresh stack and on the stack of another branch.
+- Every command the diff writes in a doc, an `AGENTS.md` or an error message: run as written; one that does not work is a finding.
+- Seed or demo data: opened on every screen it serves, with a count in the database compared to what the seed prints.
+- A screen: also played in error (the API answering 500, the URL edited by hand), with the browser console open; a console error is a finding.
+- The three imposed cases the author listed (see *Tests*): each replayed.
+
+A scenario not played is listed with its reason, never left out. The no-free-stack rule above holds.
 
 ## Severity gate — reproducibility and probability, not just plausibility
 
