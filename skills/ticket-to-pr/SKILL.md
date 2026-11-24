@@ -183,7 +183,13 @@ Transition refused, or the status absent from this workflow? Report it and ask. 
 
 Milestones, each one dispatchable and each one verifiable on its own. Write it to the session scratchpad, never into the repository: the diff of this branch carries the ticket's code and nothing else.
 
-Each milestone says what it delivers, the files it creates or modifies, how it is verified (the test, or what is observed on the running app), and which edge case settled at GATE 1 it implements. After the milestones, the risks: what the plan assumes without having checked it, a migration, a file another open branch also touches.
+Each milestone says what it delivers, the files it creates or modifies, how it is verified (the test, or what is observed on the running app), and which edge case settled at GATE 1 it implements. After the milestones, two mandatory sections, then the risks.
+
+**Impact table**, filled by grep, never from memory, the same columns the `review-diff` *Impact* dimension is redone on: what is modified (function, procedure, component, query, shared style); its readers and callers, with `file:line`; the second copies of the same rule or computation; the other writers of the same state; for each new write, the read it shifts (pagination, total, cache, log); and, in a stack, what each PR runs alone once merged alone.
+
+**Sources, word for word**: every rule and acceptance criterion of the ticket, every linked business rule of the source of truth, every rule of the `AGENTS.md` (or equivalent) of the touched folders, copied verbatim, never paraphrased. Each line names the PR and the file that realize it, or "deferred" with the ticket that takes it over. A line with neither does not leave the plan.
+
+The risks: what the plan assumes without having checked it, a migration, a file another open branch also touches.
 
 The plan also says how the work ships: **one pull request per 800 changed lines at most**, migrations and generated files aside. Over that, cut it into stacked PRs along the milestones (foundation first, following the `overlapping-prs` skill of this plugin), each one reviewable alone and working once merged alone: a code, key, field or route a PR renames is followed by every reader of it in the same PR, and a test or a fix a PR leaves to another one is named in both bodies and checked there before either merges. Review findings grow with PR size, much faster than its line count: a single PR is kept above the limit only when the user says so at GATE 2.
 
@@ -199,6 +205,8 @@ One subagent per milestone, `model: sonnet`, with a checkpoint between milestone
 
 Every agent works in the worktree, against its stack. Never `docker compose restart/stop/up/down` on a shared service, never mutate the main database.
 
+Tests come first: before the code, a milestone writes the failing tests for the three imposed cases wherever they exist in its diff (an invalid external input; an external call failing for one item and for all; a user action sent twice), and its prompt lists them.
+
 Each milestone prompt says: tracked files, new ones included, are written with the Write and Edit tools, never a shell heredoc (`cat > file <<EOF`) or `sed -i`. A heredoc hides the diff from the transcript and waits on an approval.
 
 ## 6 bis. Self-review
@@ -210,6 +218,7 @@ One **fresh** subagent follows the `review-diff` skill of this plugin — not a 
 - **The diff**: nothing is committed yet, so the working tree against the base, `git diff origin/<base>` plus the untracked files read whole — `origin/<base>...HEAD` would be empty.
 - **The checkout and the stack**: the worktree path, its branch and the ports `wtm adopt` printed.
 - **The expected behaviour**: the retained scope and the edge cases settled at GATE 1.
+- **The impact table and the sources matrix** of the plan, for it to compare with its own *Impact* pass and to check every line against the code.
 - **The mergeability verdict**: none to read — step 8 runs the gates.
 
 Then the loop, bounded on purpose:
